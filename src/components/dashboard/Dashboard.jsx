@@ -1,5 +1,5 @@
-import { Grid, Card, CardContent, Typography } from '@mui/material';
-import Layout from '../common/Layout';
+import React from 'react';
+import { Grid, Card, CardContent, Typography, Box } from '@mui/material';
 
 const DashboardCard = ({ title, value, description }) => (
   <Card className="h-full">
@@ -27,7 +27,7 @@ const Dashboard = () => {
   };
 
   return (
-    <Layout>
+    <Box sx={{ p: 3 }}>
       <Typography variant="h4" component="h1" className="mb-6">
         Dashboard
       </Typography>
@@ -61,7 +61,7 @@ const Dashboard = () => {
           />
         </Grid>
       </Grid>
-    </Layout>
+    </Box>
   );
 };
 

@@ -1,4 +1,5 @@
 import axiosInstance from './axiosConfig';
+import { toast } from 'react-hot-toast';
 
 // Add this fallback login function to handle server errors
 const demoLogin = (credentials) => {
@@ -66,8 +67,14 @@ const demoLogin = (credentials) => {
 
 // Update the login function to use demo fallback
 const login = async (credentials) => {
+  // Ensure credentials has a role
+  const loginData = {
+    ...credentials,
+    role: credentials.role || 'student' // Default to student if no role provided
+  };
+  
   try {
-    const response = await axiosInstance.post('/auth/login', credentials);
+    const response = await axiosInstance.post('/auth/login', loginData);
     
     if (!response || !response.data) {
       throw new Error('Invalid response from server');
@@ -90,7 +97,7 @@ const login = async (credentials) => {
       user
     };
   } catch (error) {
-    console.warn('API login failed, trying demo mode:', error);
+    console.warn('API login failed, trying demo mode:', error.message || 'Unknown error');
     
     // If server error, try demo login
     if (error.message === 'Network Error' || 
@@ -108,7 +115,7 @@ const login = async (credentials) => {
         duration: 5000
       });
       
-      return demoLogin(credentials);
+      return demoLogin(loginData);
     }
     
     // If it's a regular auth error (not a server issue), pass it through

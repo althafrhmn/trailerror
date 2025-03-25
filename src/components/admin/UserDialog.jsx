@@ -139,7 +139,14 @@ const UserDialog = ({ open, onClose, user, onSave }) => {
   const validateBasicInfo = () => {
     const newErrors = {};
     if (!formData.name) newErrors.name = 'Name is required';
-    if (!formData.email) newErrors.email = 'Email is required';
+    
+    // Email validation
+    if (!formData.email) {
+      newErrors.email = 'Email is required';
+    } else if (!/^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(formData.email)) {
+      newErrors.email = 'Invalid email address format';
+    }
+    
     if (!formData.username) newErrors.username = 'Username is required';
     if (!user && !formData.password) newErrors.password = 'Password is required';
     if (!formData.role) newErrors.role = 'Role is required';
@@ -247,10 +254,19 @@ const UserDialog = ({ open, onClose, user, onSave }) => {
           name="email"
           type="email"
           value={formData.email}
-          onChange={handleChange}
+          onChange={(e) => {
+            handleChange(e);
+            // Real-time email validation
+            if (e.target.value && !/^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(e.target.value)) {
+              setErrors(prev => ({...prev, email: 'Invalid email address format'}));
+            } else if (e.target.value) {
+              setErrors(prev => ({...prev, email: ''}));
+            }
+          }}
           error={!!errors.email}
           helperText={errors.email}
           required
+          placeholder="example@domain.com"
         />
       </Grid>
       <Grid item xs={12} sm={6}>

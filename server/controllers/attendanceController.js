@@ -3,6 +3,7 @@ const Attendance = require('../models/Attendance');
 const User = require('../models/User');
 const { sendEmail } = require('../utils/email');
 const { trackActivity } = require('../utils/activityTracker');
+const { sendAttendanceNotification } = require('../services/emailService');
 
 // Mark attendance for students
 const markAttendance = async (req, res) => {
@@ -43,6 +44,12 @@ const markAttendance = async (req, res) => {
       
       // Process each attendance record individually
       const updates = [];
+      const notificationPromises = [];
+      const emailResults = { 
+        parent: { success: 0, failed: 0 },
+        student: { success: 0, failed: 0 }
+      };
+      
       for (const data of attendanceData) {
         // Skip records without a status
         if (!data.status) continue;
@@ -63,7 +70,61 @@ const markAttendance = async (req, res) => {
           { upsert: true, new: true }
         );
         updates.push(updated);
+        
+        // Send notifications for absent and late students
+        if (data.status === 'absent' || data.status === 'late') {
+          // Get student details with parent info
+          const student = await User.findById(data.studentId)
+            .populate('studentInfo.parentId', 'name email');
+          
+          if (student) {
+            const parentEmail = student.studentInfo?.parentId?.email;
+            const parentName = student.studentInfo?.parentId?.name;
+            const studentEmail = student.email;
+            
+            // Send email notification asynchronously
+            const emailPromise = sendAttendanceNotification({
+              studentName: student.name,
+              studentId: student._id,
+              studentEmail: studentEmail,
+              parentEmail: parentEmail,
+              parentName: parentName,
+              attendanceStatus: data.status,
+              date: date,
+              className: className,
+              subject: subject,
+              remarks: data.remarks
+            })
+            .then((result) => {
+              if (result.parent?.sent) {
+                emailResults.parent.success++;
+                console.log(`Email notification sent to parent of ${student.name}`);
+              } else if (result.parent?.error) {
+                emailResults.parent.failed++;
+                console.error(`Failed to send email to parent of ${student.name}: ${result.parent.error}`);
+              }
+              
+              if (result.student?.sent) {
+                emailResults.student.success++;
+                console.log(`Email notification sent to student ${student.name}`);
+              } else if (result.student?.error) {
+                emailResults.student.failed++;
+                console.error(`Failed to send email to student ${student.name}: ${result.student.error}`);
+              }
+            })
+            .catch(err => {
+              emailResults.parent.failed++;
+              emailResults.student.failed++;
+              console.error(`Failed to send emails for ${student.name}:`, err);
+            });
+            
+            notificationPromises.push(emailPromise);
+          }
+        }
       }
+
+      // Wait for all notifications to be processed
+      await Promise.allSettled(notificationPromises);
 
       // Track activity
       await trackActivity({
@@ -78,10 +139,46 @@ const markAttendance = async (req, res) => {
         }
       }).catch(err => console.error('Activity tracking error:', err));
 
+      // Build response message
+      let responseMessage = 'Attendance updated successfully';
+      const totalSent = emailResults.parent.success + emailResults.student.success;
+      const totalFailed = emailResults.parent.failed + emailResults.student.failed;
+
+      if (totalSent > 0) {
+        responseMessage += `. ${totalSent} email notification${totalSent !== 1 ? 's' : ''} sent`;
+        if (emailResults.parent.success > 0) {
+          responseMessage += ` (${emailResults.parent.success} to parents`;
+          if (emailResults.student.success > 0) {
+            responseMessage += `, ${emailResults.student.success} to students`;
+          }
+          responseMessage += `)`;
+        } else if (emailResults.student.success > 0) {
+          responseMessage += ` (${emailResults.student.success} to students)`;
+        }
+      }
+
+      if (totalFailed > 0) {
+        responseMessage += ` (${totalFailed} email notification${totalFailed !== 1 ? 's' : ''} failed to send)`;
+      }
+
       res.status(200).json({
         success: true,
-        message: 'Attendance updated successfully',
-        count: updates.length
+        message: responseMessage,
+        count: updates.length,
+        emailNotifications: {
+          parent: {
+            sent: emailResults.parent.success,
+            failed: emailResults.parent.failed
+          },
+          student: {
+            sent: emailResults.student.success,
+            failed: emailResults.student.failed
+          },
+          total: {
+            sent: totalSent,
+            failed: totalFailed
+          }
+        }
       });
     } else {
       // Create attendance records
@@ -127,31 +224,92 @@ const markAttendance = async (req, res) => {
           data => data.status === 'absent' || data.status === 'late'
         );
 
+        const emailResults = { 
+          parent: { success: 0, failed: 0 },
+          student: { success: 0, failed: 0 }
+        };
+
         if (absentAndLateStudents.length > 0) {
           const students = await User.find({
             _id: { $in: absentAndLateStudents.map(s => s.studentId) }
-          }).populate('studentInfo.parentId');
+          }).populate('studentInfo.parentId', 'name email');
 
-          // Send emails to parents
-          for (const student of students) {
+          // Send emails to parents using the new email service
+          const notificationPromises = students.map(async (student) => {
             const attendance = absentAndLateStudents.find(
               a => a.studentId.toString() === student._id.toString()
             );
 
             if (student.studentInfo?.parentId?.email) {
-              await sendEmail({
-                to: student.studentInfo.parentId.email,
-                subject: `Attendance Alert - ${student.name}`,
-                text: `Your child ${student.name} was marked ${attendance.status} for ${subject} class on ${date}.`
-              }).catch(err => console.error('Email sending error:', err));
+              try {
+                await sendAttendanceNotification({
+                  studentName: student.name,
+                  studentId: student._id,
+                  studentEmail: student.email,
+                  parentEmail: student.studentInfo.parentId.email,
+                  parentName: student.studentInfo.parentId.name,
+                  attendanceStatus: attendance.status,
+                  date: date,
+                  className: className,
+                  subject: subject,
+                  remarks: attendance.remarks
+                });
+                emailResults.parent.success++;
+                emailResults.student.success++;
+                return true;
+              } catch (err) {
+                console.error(`Failed to send email to parent of ${student.name}:`, err);
+                emailResults.parent.failed++;
+                emailResults.student.failed++;
+                return false;
+              }
             }
+            return null;
+          });
+
+          await Promise.allSettled(notificationPromises);
+        }
+
+        // Build response message
+        let responseMessage = 'Attendance marked successfully';
+        const totalSent = emailResults.parent.success + emailResults.student.success;
+        const totalFailed = emailResults.parent.failed + emailResults.student.failed;
+
+        if (totalSent > 0) {
+          responseMessage += `. ${totalSent} email notification${totalSent !== 1 ? 's' : ''} sent`;
+          if (emailResults.parent.success > 0) {
+            responseMessage += ` (${emailResults.parent.success} to parents`;
+            if (emailResults.student.success > 0) {
+              responseMessage += `, ${emailResults.student.success} to students`;
+            }
+            responseMessage += `)`;
+          } else if (emailResults.student.success > 0) {
+            responseMessage += ` (${emailResults.student.success} to students)`;
           }
+        }
+
+        if (totalFailed > 0) {
+          responseMessage += ` (${totalFailed} email notification${totalFailed !== 1 ? 's' : ''} failed to send)`;
         }
 
         res.status(201).json({
           success: true,
-          message: 'Attendance marked successfully',
-          count: attendanceRecords.length
+          message: responseMessage,
+          count: attendanceRecords.length,
+          emailNotifications: {
+            parent: {
+              sent: emailResults.parent.success,
+              failed: emailResults.parent.failed
+            },
+            student: {
+              sent: emailResults.student.success,
+              failed: emailResults.student.failed
+            },
+            total: {
+              sent: totalSent,
+              failed: totalFailed
+            }
+          }
         });
       } catch (error) {
         // Check if it's a duplicate key error

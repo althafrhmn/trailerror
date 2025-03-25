@@ -84,7 +84,7 @@ const FacultyDashboard = () => {
       try {
         const token = localStorage.getItem('token');
         if (token) {
-          const leaveResponse = await axios.get('http://localhost:5000/api/leaves?status=pending', {
+          const leaveResponse = await axios.get('http://localhost:5001/api/leaves?status=pending', {
             headers: {
               Authorization: `Bearer ${token}`,
               'Content-Type': 'application/json'

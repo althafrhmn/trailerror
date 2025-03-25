@@ -169,4 +169,20 @@ router.delete('/:messageId', auth, async (req, res) => {
   }
 });
 
+// Test endpoint for connectivity checks
+router.get('/test-connection', async (req, res) => {
+  try {
+    res.json({
+      success: true,
+      message: 'Message API is operational',
+      timestamp: new Date()
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: 'Server error in test endpoint'
+    });
+  }
+});
+
 module.exports = router; 

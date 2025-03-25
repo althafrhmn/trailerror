@@ -4,7 +4,11 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 
 const Login = () => {
-  const [formData, setFormData] = useState({ email: '', password: '' });
+  const [formData, setFormData] = useState({ 
+    username: '', 
+    password: '',
+    role: 'student' // Default role
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
@@ -16,13 +20,13 @@ const Login = () => {
     
     try {
       // Validate form inputs
-      if (!formData.email || !formData.password) {
-        throw new Error('Email and password are required');
+      if (!formData.username || !formData.password || !formData.role) {
+        throw new Error('Username, password, and role are required');
       }
       
       try {
         // Try real API login first
-        const response = await axios.post('http://localhost:5000/api/auth/login', formData, {
+        const response = await axios.post('http://localhost:5001/api/auth/login', formData, {
           headers: {
             'Content-Type': 'application/json'
           },
@@ -57,7 +61,7 @@ const Login = () => {
         console.warn('API login failed, trying demo login:', apiError);
         
         // If server login fails, try demo login
-        const demoResult = demoLogin(formData.email, formData.password);
+        const demoResult = demoLogin(formData.username, formData.password);
         
         if (demoResult.success) {
           toast.success('Logged in with demo account. Some features limited.', {
@@ -74,7 +78,7 @@ const Login = () => {
           const redirectPath = userRoleRedirect[demoResult.user.role] || '/';
           navigate(redirectPath);
         } else {
-          throw new Error(demoResult.message || 'Invalid email or password');
+          throw new Error(demoResult.message || 'Invalid username or password');
         }
       }
     } catch (error) {
@@ -86,11 +90,12 @@ const Login = () => {
   };
 
   // Add this mock login function near the top of the file after the imports
-  const demoLogin = (email, password) => {
+  const demoLogin = (username, password) => {
     // Mock user accounts for demonstration
     const mockUsers = [
       {
         _id: 'admin-1',
+        username: 'admin',
         email: 'admin@example.com',
         password: 'password',
         name: 'Admin User',
@@ -98,6 +103,7 @@ const Login = () => {
       },
       {
         _id: 'faculty-1',
+        username: 'faculty',
         email: 'faculty@example.com',
         password: 'password',
         name: 'John Smith',
@@ -106,6 +112,7 @@ const Login = () => {
       },
       {
         _id: 'student-1',
+        username: 'student',
         email: 'student@example.com',
         password: 'password',
         name: 'Mary Johnson',
@@ -113,13 +120,16 @@ const Login = () => {
       }
     ];
 
-    // Find matching user
-    const user = mockUsers.find(u => u.email === email && u.password === password);
+    // Find matching user by username or email
+    const user = mockUsers.find(u => 
+      (u.username === username || u.email === username) && 
+      u.password === password
+    );
     
     if (!user) {
       return {
         success: false,
-        message: 'Invalid email or password'
+        message: 'Invalid username or password'
       };
     }
 

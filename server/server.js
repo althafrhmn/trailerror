@@ -35,6 +35,56 @@ app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Special test routes that bypass middleware
+app.get('/test-email', async (req, res) => {
+  try {
+    const testEmail = req.query.email || 'gym666m@gmail.com';
+    
+    console.log('Attempting to send test email to:', testEmail);
+    console.log('Using email credentials:', {
+      service: process.env.EMAIL_SERVICE,
+      user: process.env.EMAIL_USER,
+      password: process.env.EMAIL_PASSWORD ? '****' : 'not set'
+    });
+    
+    const { sendLeaveApplication, transporter } = require('./services/emailService');
+    
+    // First test the transporter connection
+    console.log('Testing SMTP connection...');
+    const verifyResult = await transporter.verify();
+    console.log('Email transport verification:', verifyResult);
+    
+    // Send a test email
+    console.log('Sending test email...');
+    const testResult = await sendLeaveApplication({
+      subject: 'Test Email from School System',
+      toEmail: testEmail,
+      fromDate: new Date(),
+      toDate: new Date(Date.now() + 86400000), // tomorrow
+      leaveType: 'Test',
+      content: 'This is a test email to verify the email service is working correctly. The time is: ' + new Date().toLocaleTimeString(),
+      attachments: [],
+      studentName: 'Test Student',
+      studentId: 'TEST-ID-123'
+    });
+    
+    console.log('Email sending results:', testResult);
+    
+    res.status(200).json({
+      success: true,
+      message: `Test email sent to ${testEmail}`,
+      results: testResult
+    });
+  } catch (error) {
+    console.error('Test email error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to send test email',
+      stack: error.stack
+    });
+  }
+});
+
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/attendance', attendanceRoutes);
@@ -147,6 +197,12 @@ app.use((req, res) => {
 
 // Initialize database connection
 connectDB();
+
+console.log('=== SERVER STARTING ===');
+console.log('Email configuration:');
+console.log(`- EMAIL_SERVICE: ${process.env.EMAIL_SERVICE || 'not set'}`);
+console.log(`- EMAIL_USER: ${process.env.EMAIL_USER || 'not set'}`);
+console.log(`- EMAIL_PASSWORD: ${process.env.EMAIL_PASSWORD ? 'set (masked)' : 'not set'}`);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {

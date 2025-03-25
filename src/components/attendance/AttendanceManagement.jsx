@@ -1,3 +1,4 @@
+import React from 'react';
 import { useState } from 'react';
 import {
   Box,
@@ -17,7 +18,6 @@ import {
   MenuItem,
   Grid,
 } from '@mui/material';
-import Layout from '../common/Layout';
 
 const AttendanceManagement = () => {
   const [filters, setFilters] = useState({
@@ -49,7 +49,7 @@ const AttendanceManagement = () => {
   };
 
   return (
-    <Layout>
+    <Box sx={{ p: 3 }}>
       <Typography variant="h4" component="h1" className="mb-6">
         Attendance Management
       </Typography>
@@ -160,7 +160,7 @@ const AttendanceManagement = () => {
           Submit Attendance
         </Button>
       </Box>
-    </Layout>
+    </Box>
   );
 };
 

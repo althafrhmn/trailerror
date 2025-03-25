@@ -10,7 +10,7 @@ const testCredentials = [
 ];
 
 async function testLoginApi() {
-  const apiUrl = 'http://localhost:5000/api/auth/login';
+  const apiUrl = 'http://localhost:5001/api/auth/login';
   
   console.log('Testing Login API...');
   console.log('API URL:', apiUrl);

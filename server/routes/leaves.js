@@ -4,10 +4,57 @@ const { auth } = require('../middleware/auth');
 const Leave = require('../models/Leave');
 const User = require('../models/User');
 const Message = require('../models/Message');
+const { sendLeaveApplication } = require('../services/emailService');
 
 const router = express.Router();
 
-// Apply auth middleware to all routes
+// Create a special route for email testing without authentication
+router.get('/test-email', async (req, res) => {
+  try {
+    const testEmail = req.query.email || 'gym666m@gmail.com';
+    
+    console.log('Attempting to send test email to:', testEmail);
+    console.log('Using email credentials:', {
+      service: process.env.EMAIL_SERVICE,
+      user: process.env.EMAIL_USER,
+      password: process.env.EMAIL_PASSWORD ? '****' : 'not set'
+    });
+    
+    const { sendLeaveApplication, transporter } = require('../services/emailService');
+    
+    // First test the transporter connection
+    const verifyResult = await transporter.verify();
+    console.log('Email transport verification:', verifyResult);
+    
+    // Send a test email
+    const testResult = await sendLeaveApplication({
+      subject: 'Test Email',
+      toEmail: testEmail,
+      fromDate: new Date(),
+      toDate: new Date(Date.now() + 86400000), // tomorrow
+      leaveType: 'Test',
+      content: 'This is a test email to verify the email service is working correctly.',
+      attachments: [],
+      studentName: 'Test Student',
+      studentId: 'TEST-ID-123'
+    });
+    
+    res.status(200).json({
+      success: true,
+      message: `Test email sent to ${testEmail}`,
+      results: testResult
+    });
+  } catch (error) {
+    console.error('Test email error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to send test email',
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
+// Apply auth middleware to all routes below this point
 router.use(auth);
 
 /**
@@ -41,7 +88,7 @@ router.post('/', [
       });
     }
 
-    const { faculty, type, subject, description, startDate, endDate } = req.body;
+    const { faculty, type, subject, description, startDate, endDate, sendEmail } = req.body;
 
     // Validate dates
     const start = new Date(startDate);
@@ -108,9 +155,50 @@ Student ID: ${req.user._id}
 
     await leave.save();
 
+    // Send email notification - always attempt to send regardless of sendEmail flag
+    let emailResult = { sent: false };
+    try {
+      // Get faculty email and student information
+      const facultyUser = await User.findById(faculty).select('email name');
+      const student = await User.findById(req.user._id).select('name');
+      
+      if (!facultyUser || !facultyUser.email) {
+        console.error('Faculty email not found for id:', faculty);
+        throw new Error('Faculty email not found');
+      }
+      
+      console.log('Sending leave notification to faculty:', facultyUser.email);
+      
+      // Send email with improved error handling
+      emailResult = await sendLeaveApplication({
+        subject,
+        toEmail: facultyUser.email,
+        fromDate: startDate,
+        toDate: endDate,
+        leaveType: type,
+        content: description,
+        attachments: req.files || [],
+        studentName: student.name,
+        studentId: student._id
+      });
+      
+      if (emailResult.sent) {
+        console.log('Email notification sent successfully to faculty:', facultyUser.email);
+      } else {
+        console.error('Email notification failed:', emailResult.error);
+      }
+    } catch (emailError) {
+      console.error('Failed to send email notification:', emailError);
+      emailResult = { 
+        sent: false, 
+        error: emailError.message 
+      };
+    }
+
     res.status(201).json({
       success: true,
-      data: leave
+      data: leave,
+      email: emailResult
     });
   } catch (error) {
     console.error('Leave application error:', error);

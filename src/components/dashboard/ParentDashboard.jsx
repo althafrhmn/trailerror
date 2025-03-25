@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Grid,
   Card,
@@ -10,6 +10,7 @@ import {
   ListItemText,
   CircularProgress,
   Avatar,
+  Box,
 } from '@mui/material';
 import {
   Person as PersonIcon,
@@ -17,7 +18,6 @@ import {
   Assignment as AssignmentIcon,
   Notifications as NotificationsIcon,
 } from '@mui/icons-material';
-import Layout from '../common/Layout';
 import Calendar from '../common/Calendar';
 import { authService, userService } from '../../services/api';
 
@@ -39,7 +39,7 @@ const ParentDashboard = () => {
         setUser(currentUser);
 
         // Fetch events from the API
-        const response = await fetch('http://localhost:5000/api/events');
+        const response = await fetch('http://localhost:5001/api/events');
         const eventsData = await response.json();
         setEvents(eventsData);
 
@@ -116,16 +116,16 @@ const ParentDashboard = () => {
 
   if (loading) {
     return (
-      <Layout>
+      <Box sx={{ p: 3 }}>
         <div className="flex justify-center items-center h-full">
           <CircularProgress />
         </div>
-      </Layout>
+      </Box>
     );
   }
 
   return (
-    <Layout>
+    <Box sx={{ p: 3 }}>
       <div className="space-y-6 animate-fade-in">
         <div className="flex justify-between items-center">
           <Typography variant="h4" className="text-primary font-bold">
@@ -207,7 +207,7 @@ const ParentDashboard = () => {
           </Grid>
         </Grid>
       </div>
-    </Layout>
+    </Box>
   );
 };
 

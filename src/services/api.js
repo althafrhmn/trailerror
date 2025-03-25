@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = 'http://localhost:5000/api';
+const API_URL = 'http://localhost:5001/api';
 
 // Create axios instance with default config
 const api = axios.create({
@@ -428,21 +428,24 @@ export const messageService = {
     try {
       const response = await api.get('/messages');
       
-      // Handle both array and object response formats
-      if (response?.success && Array.isArray(response?.data)) {
+      // Properly handle response data formats
+      if (response?.data?.success && Array.isArray(response.data.data)) {
+        return {
+          success: true,
+          data: response.data.data,
+          pagination: response.data.pagination
+        };
+      }
+      
+      // In case the API returns just an array directly (old format)
+      if (Array.isArray(response.data)) {
         return {
           success: true,
           data: response.data
         };
       }
-      
-      if (Array.isArray(response)) {
-        return {
-          success: true,
-          data: response
-        };
-      }
 
+      // If we got a response but in unexpected format
       console.error('Invalid response format from getMessages:', response);
       return {
         success: false,
@@ -451,6 +454,16 @@ export const messageService = {
       };
     } catch (error) {
       console.error('Error in getMessages:', error);
+      
+      // Check for specific network errors
+      if (!navigator.onLine) {
+        return {
+          success: false,
+          data: [],
+          error: 'You are offline. Please check your internet connection.'
+        };
+      }
+      
       return {
         success: false,
         data: [],
@@ -461,30 +474,51 @@ export const messageService = {
 
   sendMessage: async (messageData) => {
     try {
-      if (!messageData?.receiver || !messageData?.content) {
-        throw new Error('Receiver and content are required');
+      // Validate required fields
+      if (!messageData?.receiver) {
+        throw new Error('Receiver is required');
+      }
+      
+      if (!messageData?.content) {
+        throw new Error('Message content is required');
+      }
+      
+      if (!messageData?.subject) {
+        // Set a default subject if not provided
+        messageData.subject = 'Message';
       }
 
       const response = await api.post('/messages', messageData);
       
-      // Handle both success response formats
-      if (response?.success && response?.data) {
+      // Handle response formats consistently
+      if (response?.data?.success && response.data.data) {
+        return {
+          success: true,
+          data: response.data.data
+        };
+      }
+
+      // Fallback for other successful response formats
+      if (response?.data && !response.data.error) {
         return {
           success: true,
           data: response.data
         };
       }
 
-      if (response && !response.error) {
-        return {
-          success: true,
-          data: response
-        };
-      }
-
-      throw new Error(response?.error || 'Failed to send message');
+      throw new Error(response?.data?.error || 'Failed to send message');
     } catch (error) {
       console.error('Error in sendMessage:', error);
+      
+      // Check for network connectivity
+      if (!navigator.onLine) {
+        return {
+          success: false,
+          data: null,
+          error: 'You are offline. Please check your internet connection.'
+        };
+      }
+      
       return {
         success: false,
         data: null,
@@ -501,16 +535,17 @@ export const messageService = {
 
       const response = await api.put(`/messages/${messageId}/read`);
       
-      if (response?.success) {
+      if (response?.data?.success) {
         return {
           success: true,
-          data: response.data
+          data: response.data.data
         };
       }
 
+      // Fallback for other response formats
       return {
         success: true,
-        data: response
+        data: response.data
       };
     } catch (error) {
       console.error('Error in markAsRead:', error);
@@ -518,6 +553,56 @@ export const messageService = {
         success: false,
         data: null,
         error: error.message || 'Failed to mark message as read'
+      };
+    }
+  },
+
+  markAllAsRead: async () => {
+    try {
+      const response = await api.put('/messages/all/read');
+      
+      if (response?.data?.success) {
+        return {
+          success: true,
+          data: response.data.data
+        };
+      }
+
+      return {
+        success: false,
+        error: response?.data?.error || 'Failed to mark all messages as read'
+      };
+    } catch (error) {
+      console.error('Error in markAllAsRead:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to mark all messages as read'
+      };
+    }
+  },
+
+  getUnreadCount: async () => {
+    try {
+      const response = await api.get('/messages/unread/count');
+      
+      if (response?.data?.success) {
+        return {
+          success: true,
+          count: response.data.data.count
+        };
+      }
+
+      return {
+        success: false,
+        count: 0,
+        error: response?.data?.error || 'Failed to get unread count'
+      };
+    } catch (error) {
+      console.error('Error in getUnreadCount:', error);
+      return {
+        success: false,
+        count: 0,
+        error: error.message || 'Failed to get unread count'
       };
     }
   },
@@ -530,9 +615,17 @@ export const messageService = {
 
       const response = await api.delete(`/messages/${messageId}`);
       
+      if (response?.data?.success) {
+        return {
+          success: true,
+          data: response.data.data
+        };
+      }
+
+      // Fallback for other response formats
       return {
         success: true,
-        data: response
+        data: response.data
       };
     } catch (error) {
       console.error('Error in deleteMessage:', error);
@@ -547,8 +640,12 @@ export const messageService = {
   // System messages
   sendSystemMessage: async (receivers, subject, content, relatedTo, metadata) => {
     try {
-      if (!receivers || !content) {
-        throw new Error('Receivers and content are required');
+      if (!receivers || !Array.isArray(receivers) || receivers.length === 0) {
+        throw new Error('At least one receiver is required');
+      }
+      
+      if (!content) {
+        throw new Error('Content is required');
       }
 
       const response = await api.post('/messages/system', {
@@ -556,18 +653,48 @@ export const messageService = {
         subject: subject || 'System Message',
         content,
         type: 'system',
-        relatedTo,
-        metadata
+        relatedTo: relatedTo || 'general',
+        metadata: metadata || {}
       });
 
       if (response?.data?.success) {
-        return response.data.data;
+        return {
+          success: true,
+          data: response.data.data
+        };
       }
 
       throw new Error(response?.data?.error || 'Failed to send system message');
     } catch (error) {
       console.error('Error in sendSystemMessage:', error);
-      throw error;
+      return {
+        success: false,
+        error: error.message || 'Failed to send system message'
+      };
+    }
+  },
+  
+  // Test connection to messaging API
+  testConnection: async () => {
+    try {
+      const startTime = Date.now();
+      const response = await api.get('/messages/test-connection', { timeout: 5000 });
+      const endTime = Date.now();
+      
+      return {
+        success: true,
+        online: true,
+        responseTime: endTime - startTime,
+        serverTime: response?.data?.timestamp,
+        message: response?.data?.message || 'Connection successful'
+      };
+    } catch (error) {
+      console.error('Error testing message API connection:', error);
+      return {
+        success: false,
+        online: false,
+        error: error.message || 'Failed to connect to messaging API'
+      };
     }
   }
 };

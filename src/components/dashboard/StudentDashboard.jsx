@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Grid,
@@ -15,6 +15,11 @@ import {
   Box,
   Badge,
   Divider,
+  Avatar,
+  useTheme,
+  LinearProgress,
+  Chip,
+  IconButton,
 } from '@mui/material';
 import {
   School as SchoolIcon,
@@ -22,13 +27,18 @@ import {
   Assignment as AssignmentIcon,
   Timeline as TimelineIcon,
   Send as SendIcon,
+  CalendarToday as CalendarIcon,
+  Refresh as RefreshIcon,
+  NavigateNext as NavigateNextIcon,
+  AccessTime as AccessTimeIcon,
+  Notifications as NotificationsIcon,
 } from '@mui/icons-material';
-import Layout from '../common/Layout';
 import Calendar from '../common/Calendar';
 import { authService } from '../../services/api';
 
 const StudentDashboard = () => {
   const navigate = useNavigate();
+  const theme = useTheme();
   const [stats, setStats] = useState({
     attendance: {
       overall: 0,
@@ -86,7 +96,7 @@ const StudentDashboard = () => {
         }
 
         // Fetch events from the API with authentication
-        const response = await fetch('http://localhost:5000/api/events', {
+        const response = await fetch('http://localhost:5001/api/events', {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
@@ -133,68 +143,376 @@ const StudentDashboard = () => {
     fetchData();
   }, []);
 
-  const StatCard = ({ icon: Icon, title, value, color }) => (
-    <Card className="hover-card">
-      <CardContent className="flex items-center space-x-4">
-        <div className={`p-3 rounded-full bg-${color}-100`}>
-          <Icon className={`text-${color}-500`} fontSize="large" />
-        </div>
-        <div>
-          <Typography variant="h6" className="font-semibold">
-            {title}
-          </Typography>
-          <Typography variant="h4" className="text-primary">
-            {value}
-          </Typography>
-        </div>
-      </CardContent>
-    </Card>
-  );
+  // Get attendance color based on percentage
+  const getAttendanceColor = (percentage) => {
+    if (percentage >= 90) return theme.palette.success.main;
+    if (percentage >= 75) return theme.palette.info.main;
+    if (percentage >= 60) return theme.palette.warning.main;
+    return theme.palette.error.main;
+  };
 
   if (loading) {
     return (
-      <Layout>
-        <div className="flex justify-center items-center h-full">
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: 'calc(100vh - 100px)'
+      }}>
           <CircularProgress />
-        </div>
-      </Layout>
+      </Box>
     );
   }
 
   return (
-    <Container maxWidth="lg" className="py-8">
-      <Grid container spacing={3}>
-        <Grid item xs={12} md={8}>
-          <Paper className="p-4">
-            <h1 className="text-2xl font-semibold text-slate-800 mb-6">Student Dashboard</h1>
-            <Calendar
-              events={events}
-              isEditable={false}
-            />
-          </Paper>
-        </Grid>
-        <Grid item xs={12} md={4}>
-          <div className="space-y-6 animate-fade-in">
-            <div className="flex justify-between items-center">
-              <Typography variant="h5" gutterBottom className="animate-fade-in">
-                Welcome back, {user?.name || 'Student'}
-              </Typography>
-            </div>
+    <Box sx={{ p: { xs: 2, md: 3 } }}>
+      {/* Header Section */}
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        mb: 3,
+        flexDirection: { xs: 'column', sm: 'row' },
+        gap: { xs: 2, sm: 0 },
+      }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Avatar 
+            sx={{ 
+              width: 60, 
+              height: 60, 
+              bgcolor: theme.palette.primary.main 
+            }}
+          >
+            {user?.name?.charAt(0) || 'S'}
+          </Avatar>
+          <Box>
+            <Typography variant="h4" fontWeight="bold">
+              Welcome back, {user?.name || 'Student'}
+            </Typography>
+            <Typography variant="subtitle1" color="text.secondary">
+              {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+            </Typography>
+          </Box>
+        </Box>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <IconButton 
+            color="primary" 
+            aria-label="refresh" 
+            sx={{ bgcolor: 'background.light', boxShadow: 1 }}
+          >
+            <RefreshIcon />
+          </IconButton>
+          <IconButton 
+            color="primary" 
+            aria-label="notifications" 
+            sx={{ bgcolor: 'background.light', boxShadow: 1 }}
+          >
+            <Badge badgeContent={3} color="error">
+              <NotificationsIcon />
+            </Badge>
+          </IconButton>
+        </Box>
+      </Box>
 
-            {/* Prominent Leave Application Card */}
+      <Grid container spacing={3}>
+        {/* Left column */}
+        <Grid item xs={12} md={8}>
+          {/* Stats row */}
+          <Grid container spacing={2} sx={{ mb: 3 }}>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card sx={{ 
+                height: '100%', 
+                boxShadow: 2, 
+                borderRadius: 2,
+                transition: 'transform 0.2s, box-shadow 0.2s',
+                '&:hover': { 
+                  transform: 'translateY(-4px)', 
+                  boxShadow: 4 
+                }
+              }}>
+                <CardContent sx={{ p: 2 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                    <Avatar sx={{ bgcolor: 'primary.light', mr: 1, width: 32, height: 32 }}>
+                      <TimelineIcon fontSize="small" />
+                    </Avatar>
+                    <Typography variant="body2" color="text.secondary">
+                      Attendance
+                    </Typography>
+                  </Box>
+                  <Typography variant="h4" fontWeight="bold">
+                    {stats.attendance.overall}%
+                  </Typography>
+                  <LinearProgress 
+                    variant="determinate" 
+                    value={stats.attendance.overall} 
+                    sx={{ 
+                      mt: 1, 
+                      borderRadius: 1,
+                      height: 8,
+                      backgroundColor: '#e0e0e0',
+                      '& .MuiLinearProgress-bar': {
+                        backgroundColor: getAttendanceColor(stats.attendance.overall)
+                      }
+                    }}
+                  />
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card sx={{ 
+                height: '100%', 
+                boxShadow: 2, 
+                borderRadius: 2,
+                transition: 'transform 0.2s, box-shadow 0.2s',
+                '&:hover': { 
+                  transform: 'translateY(-4px)', 
+                  boxShadow: 4 
+                }
+              }}>
+                <CardContent sx={{ p: 2 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                    <Avatar sx={{ bgcolor: 'success.light', mr: 1, width: 32, height: 32 }}>
+                      <SchoolIcon fontSize="small" />
+                    </Avatar>
+                    <Typography variant="body2" color="text.secondary">
+                      Subjects
+                    </Typography>
+                  </Box>
+                  <Typography variant="h4" fontWeight="bold">
+                    {stats.attendance.subjects.length}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card sx={{ 
+                height: '100%', 
+                boxShadow: 2, 
+                borderRadius: 2,
+                transition: 'transform 0.2s, box-shadow 0.2s',
+                '&:hover': { 
+                  transform: 'translateY(-4px)', 
+                  boxShadow: 4 
+                }
+              }}>
+                <CardContent sx={{ p: 2 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                    <Avatar sx={{ bgcolor: 'warning.light', mr: 1, width: 32, height: 32 }}>
+                      <AssignmentIcon fontSize="small" />
+                    </Avatar>
+                    <Typography variant="body2" color="text.secondary">
+                      Pending Leaves
+                    </Typography>
+                  </Box>
+                  <Typography variant="h4" fontWeight="bold">
+                    {stats.pendingLeaves}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <Card sx={{ 
+                height: '100%', 
+                boxShadow: 2, 
+                borderRadius: 2,
+                transition: 'transform 0.2s, box-shadow 0.2s',
+                '&:hover': { 
+                  transform: 'translateY(-4px)', 
+                  boxShadow: 4 
+                }
+              }}>
+                <CardContent sx={{ p: 2 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                    <Avatar sx={{ bgcolor: 'info.light', mr: 1, width: 32, height: 32 }}>
+                      <EventNoteIcon fontSize="small" />
+                    </Avatar>
+                    <Typography variant="body2" color="text.secondary">
+                      Today's Classes
+                    </Typography>
+                  </Box>
+                  <Typography variant="h4" fontWeight="bold">
+                    {stats.timetable.length}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+
+          {/* Calendar section */}
+          <Card sx={{ 
+            mb: 3, 
+            boxShadow: 2, 
+            borderRadius: 2,
+            overflow: 'hidden'
+          }}>
+            <CardContent sx={{ p: 0 }}>
+              <Box sx={{ 
+                p: 2, 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center',
+                borderBottom: `1px solid ${theme.palette.divider}`
+              }}>
+                <Typography variant="h6" fontWeight="bold">
+                  Academic Calendar
+                </Typography>
+                <Chip 
+                  icon={<CalendarIcon />} 
+                  label="View Full Calendar" 
+                  onClick={() => navigate('/student/timetable')} 
+                  clickable
+                  color="primary"
+                  variant="outlined"
+                />
+              </Box>
+              <Box sx={{ 
+                p: 2,
+                height: { xs: '350px', md: '400px' },
+                '.calendar-container': {
+                  height: '100%',
+                },
+                '.MuiPickersLayout-root': {
+                  overflow: 'hidden',
+                },
+                '.MuiDateCalendar-root': { 
+                  maxHeight: { xs: '320px', md: '380px' },
+                  '.MuiDayCalendar-header': {
+                    justifyContent: 'space-around',
+                  },
+                  '.MuiPickersCalendarHeader-root': {
+                    paddingLeft: 2,
+                    paddingRight: 2,
+                  },
+                },
+              }} className="calendar-in-dashboard">
+                {events && events.length > 0 ? (
+            <Calendar
+                    events={events.map(event => ({
+                      ...event,
+                      id: event.id || `event-${Math.random().toString(36).substr(2, 9)}`,
+                      start: event.date || event.start,
+                      end: event.date || event.end,
+                      title: event.title,
+                      allDay: true
+                    }))}
+              isEditable={false}
+                    height="100%"
+                  />
+                ) : (
+                  <Box sx={{ 
+                    display: 'flex', 
+                    justifyContent: 'center', 
+                    alignItems: 'center', 
+                    height: '100%',
+                    flexDirection: 'column',
+                    gap: 2,
+                    p: 3
+                  }}>
+                    <CalendarIcon sx={{ fontSize: 48, color: 'text.secondary', opacity: 0.5 }} />
+                    <Typography variant="body1" color="text.secondary">
+                      No events scheduled
+                    </Typography>
+                  </Box>
+                )}
+              </Box>
+            </CardContent>
+          </Card>
+
+          {/* Today's timetable */}
+          <Card sx={{ 
+            boxShadow: 2, 
+            borderRadius: 2,
+            overflow: 'hidden'
+          }}>
+            <CardContent sx={{ p: 0 }}>
+              <Box sx={{ 
+                p: 2, 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center',
+                borderBottom: `1px solid ${theme.palette.divider}`
+              }}>
+                <Typography variant="h6" fontWeight="bold">
+                  Today's Timetable
+                </Typography>
+                <Button 
+                  variant="text" 
+                  endIcon={<NavigateNextIcon />}
+                  onClick={() => navigate('/student/timetable')}
+                >
+                  View Full Timetable
+                </Button>
+              </Box>
+              <List sx={{ p: 0 }}>
+                {stats.timetable.map((period, index) => (
+                  <ListItem 
+                    key={index}
+                    divider={index < stats.timetable.length - 1}
+                    sx={{ 
+                      py: 2,
+                      px: 3,
+                      transition: 'background-color 0.2s',
+                      '&:hover': { bgcolor: 'background.light' }
+                    }}
+                  >
+                    <Box sx={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      width: '100%' 
+                    }}>
+                      <Avatar 
+                        sx={{ 
+                          bgcolor: theme.palette.primary.main,
+                          color: 'white',
+                          mr: 2
+                        }}
+                      >
+                        {period.subject.charAt(0)}
+                      </Avatar>
+                      <ListItemText 
+                        primary={period.subject}
+                        secondary={
+                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            <AccessTimeIcon fontSize="small" sx={{ mr: 0.5, color: 'text.secondary', fontSize: '1rem' }} />
+                            <Typography variant="body2" color="text.secondary">
+                              {period.time}
+                            </Typography>
+                          </Box>
+                        }
+                      />
+                      <Chip 
+                        label="Upcoming" 
+                        size="small" 
+                        color="primary" 
+                        variant="outlined"
+                      />
+                    </Box>
+                  </ListItem>
+                ))}
+              </List>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Right column */}
+        <Grid item xs={12} md={4}>
+          {/* Leave application card */}
             <Card 
               sx={{ 
-                marginTop: 3, 
-                marginBottom: 3, 
-                background: 'linear-gradient(to right, #4776E6, #8E54E9)',
+              mb: 3, 
+              background: 'linear-gradient(135deg, #4776E6 0%, #8E54E9 100%)',
+              borderRadius: 2,
+              boxShadow: 3,
                 transition: 'transform 0.3s',
-                '&:hover': { transform: 'translateY(-5px)', boxShadow: '0 10px 20px rgba(0,0,0,0.2)' }
+              '&:hover': { 
+                transform: 'translateY(-8px)', 
+                boxShadow: 6
+              }
               }}
               onClick={() => navigate('/student/leave-application')}
-              className="cursor-pointer"
             >
-              <CardContent sx={{ padding: 3 }}>
-                <Box display="flex" alignItems="center" justifyContent="space-between">
+            <CardContent sx={{ p: 3 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Typography variant="h5" component="h2" sx={{ color: 'white', fontWeight: 'bold' }}>
                     Need time off?
                   </Typography>
@@ -226,64 +544,107 @@ const StudentDashboard = () => {
               </CardContent>
             </Card>
 
-            <Grid container spacing={3} className="animate-slide-up">
-              <Grid item xs={12} md={3}>
-                <StatCard
-                  icon={TimelineIcon}
-                  title="Overall Attendance"
-                  value={`${stats.attendance.overall}%`}
-                  color="blue"
-                />
-              </Grid>
-              <Grid item xs={12} md={3}>
-                <StatCard
-                  icon={SchoolIcon}
-                  title="Total Subjects"
-                  value={stats.attendance.subjects.length}
-                  color="green"
-                />
-              </Grid>
-              <Grid item xs={12} md={3}>
-                <StatCard
-                  icon={AssignmentIcon}
-                  title="Pending Leaves"
-                  value={stats.pendingLeaves}
-                  color="orange"
-                />
-              </Grid>
-              <Grid item xs={12} md={3}>
-                <StatCard
-                  icon={EventNoteIcon}
-                  title="Today's Classes"
-                  value={stats.timetable.length}
-                  color="purple"
-                />
-              </Grid>
-            </Grid>
-
-            <Grid container spacing={3} className="animate-slide-up" style={{ animationDelay: '0.2s' }}>
-              <Grid item xs={12} md={6}>
-                <Card className="hover-card h-full">
-                  <CardContent>
-                    <Typography variant="h6" className="font-semibold mb-4">
+          {/* Subject attendance card */}
+          <Card sx={{ 
+            boxShadow: 2, 
+            borderRadius: 2,
+            overflow: 'hidden',
+            mb: 3
+          }}>
+            <CardContent sx={{ p: 0 }}>
+              <Box sx={{ 
+                p: 2, 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center',
+                borderBottom: `1px solid ${theme.palette.divider}`
+              }}>
+                <Typography variant="h6" fontWeight="bold">
                       Subject-wise Attendance
                     </Typography>
-                    <List>
+              </Box>
+              <List sx={{ p: 0 }}>
                       {stats.attendance.subjects.map((subject, index) => (
                         <ListItem
                           key={index}
-                          className="hover:bg-gray-50 rounded-lg transition-colors duration-200"
+                    divider={index < stats.attendance.subjects.length - 1}
+                    sx={{ 
+                      py: 2,
+                      px: 3,
+                      transition: 'background-color 0.2s',
+                      '&:hover': { bgcolor: 'background.light' }
+                    }}
+                  >
+                    <ListItemText 
+                      primary={
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                          <Typography variant="body1" fontWeight="medium">{subject.name}</Typography>
+                          <Typography variant="body1" fontWeight="bold" color={getAttendanceColor(subject.percentage)}>
+                            {subject.percentage}%
+                          </Typography>
+                        </Box>
+                      }
+                      secondary={
+                        <LinearProgress 
+                          variant="determinate" 
+                          value={subject.percentage} 
+                          sx={{ 
+                            borderRadius: 1,
+                            height: 6,
+                            backgroundColor: '#e0e0e0',
+                            '& .MuiLinearProgress-bar': {
+                              backgroundColor: getAttendanceColor(subject.percentage)
+                            }
+                          }}
+                        />
+                      }
+                    />
+                  </ListItem>
+                ))}
+              </List>
+            </CardContent>
+          </Card>
+
+          {/* Upcoming events */}
+          <Card sx={{ 
+            boxShadow: 2, 
+            borderRadius: 2,
+            overflow: 'hidden'
+          }}>
+            <CardContent sx={{ p: 0 }}>
+              <Box sx={{ 
+                p: 2, 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center',
+                borderBottom: `1px solid ${theme.palette.divider}`
+              }}>
+                <Typography variant="h6" fontWeight="bold">
+                  Upcoming Events
+                </Typography>
+              </Box>
+              <List sx={{ p: 0 }}>
+                {stats.upcomingEvents.map((event, index) => (
+                  <ListItem 
+                    key={index}
+                    divider={index < stats.upcomingEvents.length - 1}
+                    sx={{ 
+                      py: 2,
+                      px: 3,
+                      transition: 'background-color 0.2s',
+                      '&:hover': { bgcolor: 'background.light' }
+                    }}
                         >
                           <ListItemText
-                            primary={subject.name}
-                            secondary={`Attendance: ${subject.percentage}%`}
-                          />
-                          <div className="w-24 bg-gray-200 rounded-full h-2.5">
-                            <div
-                              className="bg-primary h-2.5 rounded-full"
-                              style={{ width: `${subject.percentage}%` }}
-                            ></div>
-                          </div>
+                      primary={event.title}
+                      secondary={event.date}
+                    />
+                    <Chip 
+                      label="Upcoming" 
+                      size="small" 
+                      color="warning" 
+                      variant="outlined"
+                    />
                         </ListItem>
                       ))}
                     </List>
@@ -291,10 +652,7 @@ const StudentDashboard = () => {
                 </Card>
               </Grid>
             </Grid>
-          </div>
-        </Grid>
-      </Grid>
-    </Container>
+    </Box>
   );
 };
 

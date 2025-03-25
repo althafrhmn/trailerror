@@ -40,7 +40,7 @@ import axios from 'axios';
 
 // Create axios instance with base URL for consistent API calls
 const api = axios.create({
-  baseURL: 'http://localhost:5000/api',
+  baseURL: 'http://localhost:5001/api',
   timeout: 10000, 
   headers: {
     'Content-Type': 'application/json'
@@ -320,6 +320,11 @@ const AttendanceNew = () => {
         }
       }
 
+      // Calculate how many students are marked absent or late (for notification preview)
+      const absentAndLateCount = attendanceRecords.filter(
+        record => record.status === 'absent' || record.status === 'late'
+      ).length;
+
       // Submit attendance data to server with the expected format
       const response = await api.post('/attendance', {
         date: selectedDate,
@@ -329,7 +334,20 @@ const AttendanceNew = () => {
       });
       
       if (response.data.success) {
-        toast.success(response.data.message || 'Attendance submitted successfully');
+        // Toast notification with info about emails sent
+        if (response.data.emailNotifications && response.data.emailNotifications.sent > 0) {
+          toast.success(response.data.message, { duration: 5000 });
+          
+          // Show additional info toast about notifications
+          if (response.data.emailNotifications.failed > 0) {
+            toast.warning(
+              `Note: ${response.data.emailNotifications.failed} email notification(s) could not be delivered. School admin has been notified.`,
+              { duration: 5000 }
+            );
+          }
+        } else {
+          toast.success(response.data.message || 'Attendance submitted successfully');
+        }
         
         // Update savedAttendance with the new data
         setSavedAttendance({
@@ -375,7 +393,20 @@ const AttendanceNew = () => {
               });
               
               if (updateResponse.data.success) {
-                toast.success(updateResponse.data.message || 'Attendance updated successfully');
+                // Toast notification with info about emails sent
+                if (updateResponse.data.emailNotifications && updateResponse.data.emailNotifications.sent > 0) {
+                  toast.success(updateResponse.data.message, { duration: 5000 });
+                  
+                  // Show additional info toast about notifications
+                  if (updateResponse.data.emailNotifications.failed > 0) {
+                    toast.warning(
+                      `Note: ${updateResponse.data.emailNotifications.failed} email notification(s) could not be delivered.`,
+                      { duration: 5000 }
+                    );
+                  }
+                } else {
+                  toast.success(updateResponse.data.message || 'Attendance updated successfully');
+                }
                 
                 // Update savedAttendance with the new data
                 setSavedAttendance({

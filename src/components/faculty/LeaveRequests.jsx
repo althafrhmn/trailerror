@@ -91,7 +91,7 @@ const LeaveRequests = () => {
       }
 
         // Fetch leave requests from API
-        const response = await axios.get('http://localhost:5000/api/leaves', {
+        const response = await axios.get('http://localhost:5001/api/leaves', {
           headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json'
@@ -241,7 +241,7 @@ const LeaveRequests = () => {
       const status = responseType === 'approve' ? 'approved' : 'rejected';
       
       // API call to update leave status
-      const response = await axios.put(`http://localhost:5000/api/leaves/${selectedLeave._id}`, {
+      const response = await axios.put(`http://localhost:5001/api/leaves/${selectedLeave._id}`, {
         status,
         comments
           }, {

@@ -17,9 +17,8 @@ import {
 } from '@mui/material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
-import { authService } from '../../services/api';
-import axios from 'axios';
-import { login } from '../../services/api/authService';
+import { useAuth } from '../../contexts/AuthContext';
+import { login as loginService } from '../../services/api/authService';
 
 const demoLogin = (username, password) => {
   // Mock user accounts for testing when server is down
@@ -82,6 +81,7 @@ const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const theme = useTheme();
+  const { login: authLogin } = useAuth();
   
   const [formData, setFormData] = useState({
     username: '',
@@ -90,7 +90,12 @@ const Login = () => {
   });
   
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({
+    username: '',
+    password: '',
+    role: ''
+  });
 
   const roles = [
     { value: 'admin', label: 'Admin' },
@@ -107,12 +112,12 @@ const Login = () => {
     }));
     
     // Clear errors when user types
-    if (error[name]) {
-      setError(prev => ({
+    if (fieldErrors[name]) {
+      setFieldErrors(prev => ({
         ...prev,
-        [name]: '',
-        general: ''
+        [name]: ''
       }));
+      setErrorMsg('');
     }
   };
 
@@ -129,57 +134,76 @@ const Login = () => {
       newErrors.password = 'Password is required';
     }
     
-    setError(newErrors);
+    setFieldErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
+    setErrorMsg('');
+    setFieldErrors({
+      username: '',
+      password: '',
+      role: ''
+    });
 
     try {
       // Validate form inputs
-      if (!formData.username || !formData.password) {
-        setError('Please enter both username and password');
+      if (!validateForm()) {
         setLoading(false);
         return;
       }
 
       // Call the login service with proper error handling
-      const result = await login(formData);
+      const result = await loginService(formData);
       
       if (!result.success) {
-        setError(result.error || 'Login failed');
-        toast.error(result.error || 'Login failed');
+        // Handle error response
+        const errorMessage = result.error || 'Login failed';
+        setErrorMsg(errorMessage);
+        toast.error(errorMessage);
         setLoading(false);
         return;
       }
       
-      // Login successful
-      const { user } = result;
+      // Login successful - update auth context
+      const { user, token } = result;
+      
+      // Set auth state using the context
+      await authLogin(user, token);
       
       // Show success message
       toast.success(`Welcome back, ${user.name || user.username}!`);
       
-      // Redirect based on user role
-      switch (user.role) {
-        case 'admin':
-          navigate('/admin/dashboard');
-          break;
-        case 'faculty':
-          navigate('/faculty/dashboard');
-          break;
-        case 'student':
-          navigate('/student/dashboard');
-          break;
-        default:
-          navigate('/');
+      // Get redirect path from location state or use default based on role
+      const from = location.state?.from?.pathname;
+      
+      // Redirect based on user role or return URL
+      if (from) {
+        navigate(from);
+      } else {
+        switch (user.role) {
+          case 'admin':
+            navigate('/admin/dashboard');
+            break;
+          case 'faculty':
+            navigate('/faculty/dashboard');
+            break;
+          case 'student':
+            navigate('/student/dashboard');
+            break;
+          case 'parent':
+            navigate('/parent/dashboard');
+            break;
+          default:
+            navigate('/');
+        }
       }
 
     } catch (err) {
       console.error('Login error:', err);
-      setError('An unexpected error occurred. Please try again.');
+      setErrorMsg('An unexpected error occurred. Please try again.');
       toast.error('Login failed: ' + (err.message || 'Unknown error'));
     } finally {
       setLoading(false);
@@ -204,9 +228,9 @@ const Login = () => {
               Login
             </Typography>
 
-            {error && (
+            {errorMsg && (
               <Alert severity="error" sx={{ mb: 2 }}>
-                {error}
+                {errorMsg}
               </Alert>
             )}
 
@@ -218,7 +242,7 @@ const Login = () => {
                   name="role"
                   value={formData.role}
                   onChange={handleChange}
-                  error={!!error.role}
+                  error={!!fieldErrors.role}
                   label="Role"
                 >
                   {roles.map((role) => (
@@ -227,9 +251,9 @@ const Login = () => {
                     </MenuItem>
                   ))}
                 </Select>
-                {error.role && (
+                {fieldErrors.role && (
                   <Typography color="error" variant="caption">
-                    {error.role}
+                    {fieldErrors.role}
                   </Typography>
                 )}
               </FormControl>
@@ -241,8 +265,8 @@ const Login = () => {
                 name="username"
                 value={formData.username}
                 onChange={handleChange}
-                error={!!error.username}
-                helperText={error.username}
+                error={!!fieldErrors.username}
+                helperText={fieldErrors.username}
               />
 
               <TextField
@@ -253,8 +277,8 @@ const Login = () => {
                 name="password"
                 value={formData.password}
                 onChange={handleChange}
-                error={!!error.password}
-                helperText={error.password}
+                error={!!fieldErrors.password}
+                helperText={fieldErrors.password}
               />
 
               <Button

@@ -429,89 +429,59 @@ const Messages = () => {
     }
     
     try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        throw new Error('Authentication required');
-      }
-
-      try {
-        // Try API call first
-        const response = await axios.get('http://localhost:5000/api/messages', {
-          headers: {
-            Authorization: `Bearer ${token}`
-          },
-          timeout: 5000 // Add timeout to prevent hanging requests
-        });
-
-        if (response?.data) {
-          let messageData = response.data;
-          
-          // Handle different response formats
-          if (response.data.success && Array.isArray(response.data.data)) {
-            messageData = response.data.data;
-          } else if (!Array.isArray(response.data)) {
-            throw new Error('Invalid message format received');
-          }
-          
-          // Filter messages for current user
-          const userMessages = messageData.filter(msg => 
-            msg.sender._id === currentUser._id || msg.receiver._id === currentUser._id
-          );
-          
-          setMessages(prevMessages => {
-            // If we already have messages, only add new ones that don't exist
-            if (prevMessages.length > 0) {
-              const existingIds = new Set(prevMessages.map(m => m._id));
-              const newMessages = userMessages.filter(m => !existingIds.has(m._id));
-              return [...newMessages, ...prevMessages].sort((a, b) => 
-                new Date(b.createdAt) - new Date(a.createdAt)
-              );
-            }
-            return userMessages;
-          });
-          
-          return userMessages;
-        } else {
-          throw new Error('Invalid message format received');
-        }
-      } catch (apiError) {
-        console.warn('API error fetching messages, using mock data:', apiError);
-        
-        // Only show toast notification if this is the first time switching to mock mode
-        if (!useMockData) {
-          setUseMockData(true);
-          localStorage.setItem('useMockData', 'true');
-          
-          // Show info toast but don't disrupt the UI
-          toast('Using demo messages due to connection issues.', {
-            icon: '🔔',
-            style: {
-              border: '1px solid #3498db',
-              padding: '16px',
-              color: '#3498db',
-            },
-          });
-        }
-        
-        // Use mock messages if API fails
-        const mockMessages = generateMockMessages();
-        setMessages(mockMessages);
-        
-        return mockMessages;
-      }
-    } catch (error) {
-      console.error('Error in fetchMessages:', error);
-      if (error.message === 'Authentication required') {
-        window.location.href = '/login';
-        return [];
-      }
+      setLoading(true);
+      // Use messageService with proper error handling
+      const response = await messageService.getMessages();
+      setLoading(false);
       
-      // Use mock data as final fallback
+      if (response.success && Array.isArray(response.data)) {
+        const messageData = response.data;
+        
+        // Filter messages for current user
+        const userMessages = messageData.filter(msg => 
+          msg.sender._id === currentUser._id || msg.receiver._id === currentUser._id
+        );
+        
+        setMessages(prevMessages => {
+          // If we already have messages, only add new ones that don't exist
+          if (prevMessages.length > 0) {
+            const existingIds = new Set(prevMessages.map(m => m._id));
+            const newMessages = userMessages.filter(m => !existingIds.has(m._id));
+            return [...newMessages, ...prevMessages].sort((a, b) => 
+              new Date(b.createdAt) - new Date(a.createdAt)
+            );
+          }
+          return userMessages;
+        });
+        
+        // Clear any error state
+        setError(null);
+        
+        return userMessages;
+      } else {
+        throw new Error(response.error || 'Failed to fetch messages');
+      }
+    } catch (apiError) {
+      console.warn('API error fetching messages, using mock data:', apiError);
+      setLoading(false);
+      
+      // Only show toast notification if this is the first time switching to mock mode
       if (!useMockData) {
         setUseMockData(true);
         localStorage.setItem('useMockData', 'true');
+        
+        // Show info toast but don't disrupt the UI
+        toast('Using demo messages due to connection issues.', {
+          icon: '🔔',
+          style: {
+            border: '1px solid #3498db',
+            padding: '16px',
+            color: '#3498db',
+          },
+        });
       }
       
+      // Use mock messages if API fails
       const mockMessages = generateMockMessages();
       setMessages(mockMessages);
       
@@ -528,6 +498,34 @@ const Messages = () => {
       setInitialLoading(true);
       
       try {
+        // Test API connection first
+        const connectionTest = await messageService.testConnection();
+        
+        if (!connectionTest.success || !connectionTest.online) {
+          // If connection test fails, use mock data mode
+          console.warn("Connection test failed:", connectionTest.error);
+          setUseMockData(true);
+          localStorage.setItem('useMockData', 'true');
+          
+          // Display toast notification for connection issues
+          toast('Unable to connect to server. Using demo mode.', {
+            icon: '⚠️',
+            style: {
+              border: '1px solid #f1c40f',
+              padding: '16px',
+              color: '#f1c40f',
+            },
+            duration: 4000
+          });
+        } else {
+          // Only clear mock mode if connection is successful and no stored preference exists
+          const hasMockPreference = localStorage.getItem('useMockData') === 'true';
+          if (!hasMockPreference) {
+            setUseMockData(false);
+            localStorage.removeItem('useMockData');
+          }
+        }
+
         const token = localStorage.getItem('token');
         if (!token) {
           window.location.href = '/login';
@@ -548,15 +546,23 @@ const Messages = () => {
           if (isMounted) {
             const mockMessages = generateMockMessages();
             setMessages(mockMessages);
+            setInitialLoading(false);
           }
         } else {
           // Try real API first - this will set useMockData if needed
           if (isMounted) {
             try {
-              const fetchedUsers = await fetchUsers();
-              if (isMounted && fetchedUsers) {
-                await fetchMessages();
+              // Fetch users and messages in parallel for better performance
+              const [fetchedUsers] = await Promise.all([
+                fetchUsers(),
+                fetchMessages()
+              ]);
+              
+              if (isMounted && !fetchedUsers) {
+                throw new Error('Failed to fetch users');
               }
+              
+              setInitialLoading(false);
             } catch (error) {
               console.error("Error fetching initial data:", error);
               if (isMounted) {
@@ -566,6 +572,17 @@ const Messages = () => {
                 setUsers(mockUsers);
                 const mockMessages = generateMockMessages();
                 setMessages(mockMessages);
+                setInitialLoading(false);
+                
+                toast('Connection issues detected. Using demo mode.', {
+                  icon: '⚠️',
+                  style: {
+                    border: '1px solid #f1c40f',
+                    padding: '16px',
+                    color: '#f1c40f',
+                  },
+                  duration: 4000
+                });
               }
             }
           }
@@ -583,9 +600,6 @@ const Messages = () => {
           setUsers(mockUsers);
           const mockMessages = generateMockMessages();
           setMessages(mockMessages);
-        }
-      } finally {
-        if (isMounted) {
           setInitialLoading(false);
         }
       }
@@ -605,14 +619,30 @@ const Messages = () => {
         if (!isMounted) return;
         
         // Ensure we're not in mock mode before fetching to prevent looping
-        if (localStorage.getItem('token') && !localStorage.getItem('useMockData')) {
+        if (localStorage.getItem('token') && localStorage.getItem('useMockData') !== 'true') {
           try {
+            // Test connection before doing heavy message fetching
+            const connectionTest = await messageService.testConnection();
+            if (!connectionTest.success || !connectionTest.online) {
+              throw new Error('Connection test failed before polling');
+            }
+            
             await fetchMessages();
           } catch (error) {
             console.warn('Error during polling, switching to mock mode:', error);
             if (isMounted) {
               setUseMockData(true);
               localStorage.setItem('useMockData', 'true');
+              
+              toast('Lost connection to server. Switching to demo mode.', {
+                icon: '⚠️',
+                style: {
+                  border: '1px solid #f1c40f',
+                  padding: '16px',
+                  color: '#f1c40f',
+                },
+                duration: 4000
+              });
             }
             if (pollIntervalRef.current) {
               clearInterval(pollIntervalRef.current);
@@ -620,7 +650,7 @@ const Messages = () => {
             }
           }
         }
-      }, 5000);
+      }, 10000); // Every 10 seconds
     }
 
     // Persist mock mode preference
@@ -687,6 +717,7 @@ const Messages = () => {
     
     setMessages(prev => [tempMessage, ...prev]);
     setMessageText('');
+    setLoading(true);
     
     // Determine if we're using mock data
     const isMockMode = useMockData || 
@@ -701,38 +732,35 @@ const Messages = () => {
       
       if (!isMockMode) {
         try {
-          // Attempt to send via real API
-          const token = localStorage.getItem('token');
-          if (!token) throw new Error('Authentication required');
+          // First test connection before sending to fail fast
+          const connectionTest = await messageService.testConnection();
+          if (!connectionTest.success || !connectionTest.online) {
+            throw new Error('Cannot connect to server');
+          }
           
+          // Use messageService instead of direct axios
           const messageData = {
-        receiver: selectedContact._id,
+            receiver: selectedContact._id,
             content: tempMessage.content,
             subject: `Message from ${currentUser.role}`,
             senderRole: currentUser.role,
             receiverRole: selectedContact.role
           };
           
-          const response = await axios.post('http://localhost:5000/api/messages', messageData, {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            },
-            timeout: 5000 // Prevent hanging requests
-          });
+          const response = await messageService.sendMessage(messageData);
           
-          if (response?.data?._id) {
+          if (response.success && response.data) {
             // Update with the real message data from API
             finalMessage = {
               ...tempMessage,
-              _id: response.data._id,
+              _id: response.data._id || response.data.id,
               status: 'sent',
               createdAt: response.data.createdAt || tempMessage.createdAt
             };
             
             toast.success('Message sent');
           } else {
-            throw new Error('Invalid response from server');
+            throw new Error(response.error || 'Failed to send message');
           }
         } catch (apiError) {
           console.warn('API error sending message, using mock mode:', apiError);
@@ -773,18 +801,22 @@ const Messages = () => {
         prev.map(msg => msg._id === tempId ? finalMessage : msg)
       );
       
-      // In mock mode, generate an auto-reply (with rate limiting)
-      if (isMockMode) {
+      // In mock mode, generate an auto-reply after a delay (with rate limiting)
+      if (isMockMode || useMockData) {
+        // Rate limit auto-replies to prevent spam
         const now = Date.now();
+        const timeSinceLastReply = now - lastAutoReplyRef.current;
         
-        // Only generate replies if we haven't recently generated one (rate limiting)
-        if (now - lastAutoReplyRef.current > 3000) {
+        // Only send auto-reply if at least 2 seconds have passed since the last one
+        if (timeSinceLastReply > 2000) {
           lastAutoReplyRef.current = now;
           
-          // Generate reply after a delay for realism
+          // Add a realistic delay (1-3 seconds) before auto-reply
+          const replyDelay = 1000 + Math.random() * 2000;
+          
           setTimeout(() => {
-            const replyMessage = {
-              _id: `mock-reply-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+            const autoReply = {
+              _id: `mock-reply-${Date.now()}`,
               content: getAutoReply(selectedContact.role, currentUser.role),
               sender: {
                 _id: selectedContact._id,
@@ -796,28 +828,29 @@ const Messages = () => {
                 name: currentUser.name,
                 role: currentUser.role
               },
-              createdAt: new Date(Date.now() + 500).toISOString(), // Slightly after current time
-              status: 'unread'
+              createdAt: new Date().toISOString(),
+              status: 'sent'
             };
             
-            // Add to message list
-            setMessages(prev => [replyMessage, ...prev]);
-          }, 1500 + Math.random() * 1000); // 1.5-2.5 second delay
+            setMessages(prev => [autoReply, ...prev]);
+          }, replyDelay);
         }
       }
     } catch (error) {
       console.error('Error sending message:', error);
       
-      // Update the temp message to show error state
+      // Update the temp message to show error
       setMessages(prev => 
         prev.map(msg => 
           msg._id === tempId 
-            ? { ...msg, status: 'error', error: error.message } 
+            ? {...msg, status: 'error', error: error.message || 'Failed to send'} 
             : msg
         )
       );
       
-      toast.error('Failed to send message');
+      toast.error('Failed to send message: ' + (error.message || 'Unknown error'));
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -837,17 +870,14 @@ const Messages = () => {
       // For real messages, try API deletion
       if (!isMockMessage) {
         try {
-          const token = localStorage.getItem('token');
-          if (!token) throw new Error('Authentication required');
+          // Use messageService instead of direct axios
+          const response = await messageService.deleteMessage(messageId);
           
-          await axios.delete(`http://localhost:5000/api/messages/${messageId}`, {
-            headers: {
-              Authorization: `Bearer ${token}`
-            },
-            timeout: 5000 // Prevent hanging requests
-          });
-          
-          toast.success('Message deleted');
+          if (response.success) {
+            toast.success('Message deleted');
+          } else {
+            throw new Error(response.error || 'Failed to delete message');
+          }
         } catch (apiError) {
           console.warn('API error deleting message, continuing with local deletion:', apiError);
           
@@ -968,6 +998,59 @@ const Messages = () => {
     handleRefresh();
   };
 
+  // Add a connection testing function to the Messages component
+  const testConnection = async () => {
+    setLoading(true);
+    try {
+      const result = await messageService.testConnection();
+      
+      if (result.success && result.online) {
+        toast.success(`Connection established! Response time: ${result.responseTime}ms`);
+        
+        // If we're in mock mode but connection works, let the user know they can exit mock mode
+        if (useMockData) {
+          toast('Server connection is available. You can exit demo mode.', {
+            icon: '✅',
+            style: {
+              border: '1px solid #2ecc71',
+              padding: '16px',
+              color: '#2ecc71',
+            },
+            duration: 5000
+          });
+        }
+      } else {
+        throw new Error(result.error || 'Connection test failed');
+      }
+    } catch (error) {
+      console.error('Connection test failed:', error);
+      toast.error('Failed to connect to server');
+      
+      // If we're not in mock mode, suggest switching
+      if (!useMockData) {
+        toast('Would you like to switch to demo mode?', {
+          icon: '❓',
+          style: {
+            border: '1px solid #3498db',
+            padding: '16px',
+            color: '#3498db',
+          },
+          duration: 8000,
+          action: {
+            text: 'Switch',
+            onClick: () => {
+              setUseMockData(true);
+              localStorage.setItem('useMockData', 'true');
+              handleRefresh();
+            }
+          }
+        });
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (initialLoading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
@@ -1025,6 +1108,42 @@ const Messages = () => {
               </Button>
             </Box>
           )}
+
+          {/* Add connection status indicator below the search bar in the contacts list */}
+          <Box sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'space-between', 
+            mt: 1,
+            mb: 1,
+            px: 2,
+            py: 1,
+            borderRadius: 1,
+            backgroundColor: 'background.paper',
+            boxShadow: 1
+          }}>
+            <Typography variant="caption" sx={{ display: 'flex', alignItems: 'center' }}>
+              <Box
+                component="span"
+                sx={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  mr: 1,
+                  bgcolor: useMockData ? 'warning.main' : 'success.main',
+                }}
+              />
+              {useMockData ? 'Demo Mode' : 'Connected'}
+            </Typography>
+            <IconButton 
+              onClick={testConnection} 
+              size="small" 
+              title="Test Connection"
+              color={useMockData ? 'warning' : 'primary'}
+            >
+              <RefreshIcon fontSize="small" />
+            </IconButton>
+          </Box>
         </Box>
         
         {error && (
@@ -1040,6 +1159,13 @@ const Messages = () => {
               button
               selected={selectedContact?._id === user._id}
               onClick={() => handleContactSelect(user)}
+              sx={{ 
+                borderRadius: 1,
+                mb: 0.5,
+                '&.Mui-selected': {
+                  backgroundColor: 'action.selected',
+                }
+              }}
             >
               <ListItemAvatar>
                 <Avatar sx={{ bgcolor: user.role === 'admin' ? 'error.main' : user.role === 'faculty' ? 'success.main' : 'primary.main' }}>
@@ -1111,8 +1237,8 @@ const Messages = () => {
         </Box>
 
         {/* Messages List */}
-        <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
-          {loading && !messages.length ? (
+        <Box sx={{ flex: 1, overflow: 'auto', p: 2, display: 'flex', flexDirection: 'column-reverse' }}>
+          {loading && !filteredMessages.length ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
               <CircularProgress />
             </Box>
@@ -1127,27 +1253,29 @@ const Messages = () => {
                 }}
               >
                 <Paper
+                  elevation={1}
                   sx={{
                     p: 2,
                     maxWidth: '70%',
                     bgcolor: message.sender._id === currentUser._id ? 'primary.main' : 'grey.100',
                     color: message.sender._id === currentUser._id ? 'white' : 'inherit',
+                    borderRadius: message.sender._id === currentUser._id ? '12px 12px 0 12px' : '12px 12px 12px 0',
                   }}
                 >
                   <Typography variant="body1">{message.content}</Typography>
                   <Box sx={{ mt: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
-                    <Typography variant="caption">
-                    {new Date(message.createdAt).toLocaleString()}
-                  </Typography>
+                    <Typography variant="caption" sx={{ opacity: 0.8 }}>
+                      {new Date(message.createdAt).toLocaleString()}
+                    </Typography>
                     {message.sender._id === currentUser._id && (
-                    <IconButton
-                      size="small"
-                      onClick={() => handleDeleteMessage(message._id)}
-                        sx={{ color: 'inherit' }}
-                    >
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  )}
+                      <IconButton
+                        size="small"
+                        onClick={() => handleDeleteMessage(message._id)}
+                        sx={{ color: 'inherit', opacity: 0.7, '&:hover': { opacity: 1 } }}
+                      >
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    )}
                   </Box>
                 </Paper>
               </Box>
@@ -1155,7 +1283,7 @@ const Messages = () => {
           ) : (
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
               <Typography color="text.secondary">
-                {selectedContact ? 'No messages yet' : 'Select a contact to start messaging'}
+                {selectedContact ? 'No messages yet. Start the conversation!' : 'Select a contact to start messaging'}
               </Typography>
             </Box>
           )}

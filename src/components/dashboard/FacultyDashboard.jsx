@@ -34,7 +34,7 @@ import { toast } from 'react-hot-toast';
 
 // Create axios instance with base URL for consistent API calls
 const api = axios.create({
-  baseURL: 'http://localhost:5000/api',
+  baseURL: 'http://localhost:5001/api',
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json'

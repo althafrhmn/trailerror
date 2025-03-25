@@ -22,6 +22,8 @@ import {
   Delete as DeleteIcon,
   Send as SendIcon,
 } from '@mui/icons-material';
+import { userService } from '../../services/api/userService';
+import axiosInstance from '../../services/api/axiosConfig';
 
 const LeaveApplication = () => {
   const [loading, setLoading] = useState(false);
@@ -56,31 +58,26 @@ const LeaveApplication = () => {
         }
 
         console.log('3. Making request to faculty endpoint...');
-        const response = await fetch('http://localhost:5001/api/leave-applications/faculty', {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
+        // Use the proper endpoint from the userService
+        const response = await axiosInstance.get('/users/faculty');
         
-        console.log('4. Response status:', response.status);
-        const result = await response.json();
-        console.log('5. Response data:', result);
+        console.log('4. Response data:', response.data);
         
-        if (!response.ok) {
-          throw new Error(result.error || `Failed to fetch faculty list (Status: ${response.status})`);
+        if (!response.data.success) {
+          throw new Error(response.data.error || 'Failed to fetch faculty list');
         }
-
-        if (!result.data || !Array.isArray(result.data)) {
-          console.error('6. Invalid data structure:', result);
+        
+        const facultyList = response.data.data;
+        
+        if (!Array.isArray(facultyList)) {
+          console.error('5. Invalid data structure:', facultyList);
           throw new Error('Invalid faculty data received');
         }
-
-        console.log('7. Setting faculty data:', result.data);
-        setFaculty(result.data);
         
-        if (result.data.length === 0) {
+        console.log('6. Setting faculty data:', facultyList);
+        setFaculty(facultyList);
+        
+        if (facultyList.length === 0) {
           setSnackbar({
             open: true,
             message: 'No faculty members found in the system.',
@@ -88,7 +85,7 @@ const LeaveApplication = () => {
           });
         }
       } catch (error) {
-        console.error('8. Error in faculty fetch:', error);
+        console.error('7. Error in faculty fetch:', error);
         setSnackbar({
           open: true,
           message: `Failed to load faculty list: ${error.message}`,
@@ -125,47 +122,82 @@ const LeaveApplication = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
-
-    try {
-      // Create FormData object to handle file uploads
-      const data = new FormData();
-      data.append('subject', formData.subject);
-      data.append('facultyId', formData.facultyId);
-      data.append('fromDate', formData.fromDate);
-      data.append('toDate', formData.toDate);
-      data.append('leaveType', formData.leaveType);
-      data.append('content', formData.content);
-      
-      // Append each attachment
-      formData.attachments.forEach(file => {
-        data.append('attachments', file);
+    
+    if (loading) return;
+    
+    // Simple validation
+    if (!formData.subject || !formData.facultyId || !formData.fromDate || 
+        !formData.toDate || !formData.leaveType || !formData.content) {
+      setSnackbar({
+        open: true,
+        message: 'Please fill in all required fields',
+        severity: 'error',
       });
-
-      // Get the token from localStorage
+      return;
+    }
+    
+    setLoading(true);
+    
+    try {
+      // Prepare data for submission
+      const leaveData = {
+        subject: formData.subject,
+        faculty: formData.facultyId,
+        type: formData.leaveType,
+        description: formData.content,
+        startDate: formData.fromDate,
+        endDate: formData.toDate,
+        sendEmail: true // Explicitly enable email notification
+      };
+      
+      console.log('Submitting leave application with JSON data:', leaveData);
+      
+      // Get the token
       const token = localStorage.getItem('token');
       if (!token) {
         throw new Error('Authentication required');
       }
 
-      // Send the request to the API
-      const response = await fetch('http://localhost:5001/api/leave-applications/submit', {
+      // First approach: Try with JSON data instead of FormData
+      // Most REST APIs handle JSON better than multipart/form-data for text data
+      const response = await fetch('http://localhost:5001/api/leaves', {
         method: 'POST',
         headers: {
+          'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: data
+        body: JSON.stringify(leaveData)
       });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to submit leave application');
+      
+      const responseText = await response.text();
+      console.log('Raw server response:', responseText);
+      
+      let responseData;
+      try {
+        responseData = JSON.parse(responseText);
+      } catch (e) {
+        console.error('Failed to parse server response as JSON:', e);
+        responseData = { success: false, error: 'Invalid server response format' };
+      }
+      
+      if (!response.ok || !responseData.success) {
+        throw new Error(responseData.error || `Server responded with status: ${response.status}`);
       }
 
+      // If we got here, the submission was successful
+      console.log('Leave application submitted successfully:', responseData, 'check if the correspondin faculty is receiveing the mail about the leave request');
+      
+      // Enhanced success message based on email status
+      let successMessage = 'Leave application submitted successfully!';
+      if (responseData.email && responseData.email.sent) {
+        successMessage += ' Email notification has been sent to the faculty.';
+      } else if (responseData.email && responseData.email.error) {
+        successMessage += ` Note: Email notification failed: ${responseData.email.error}`;
+      }
+      
       setSnackbar({
         open: true,
-        message: 'Leave application submitted successfully!',
+        message: successMessage,
         severity: 'success',
       });
 
@@ -182,9 +214,19 @@ const LeaveApplication = () => {
 
     } catch (error) {
       console.error('Error submitting leave application:', error);
+      
+      // Get the most descriptive error message possible
+      let errorMessage = 'Failed to submit leave application. Please try again.';
+      
+      if (error?.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error?.message) {
+        errorMessage = error.message;
+      }
+      
       setSnackbar({
         open: true,
-        message: error.message || 'Failed to submit leave application. Please try again.',
+        message: errorMessage,
         severity: 'error',
       });
     } finally {
