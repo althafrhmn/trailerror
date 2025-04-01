@@ -105,17 +105,24 @@ const UserDialog = ({ open, onClose, user, onSave }) => {
     'Electrical',
   ];
 
-  const classes = ['A', 'B', 'C', 'D'];
+  // Replace the simple classes array with the predefined class options
+  // that match what's used in the faculty portal
+  const CLASS_OPTIONS = [
+    "CSE-A", "CSE-B", "CSE-C", 
+    "ECE-A", "ECE-B", 
+    "MECH-A", "MECH-B"
+  ];
+  
+  // Use the same subjects as defined in the faculty portal
+  const SUBJECT_OPTIONS = [
+    "Data Structures", "Algorithms", "Database Systems", 
+    "Computer Networks", "Operating Systems", "Web Development",
+    "Machine Learning", "Artificial Intelligence", "Calculus", 
+    "Linear Algebra", "Discrete Mathematics"
+  ];
+  
   const semesters = [1, 2, 3, 4, 5, 6, 7, 8];
   const academicYears = ['2023-24', '2024-25', '2025-26', '2026-27'];
-  const subjects = [
-    'Mathematics',
-    'Physics',
-    'Chemistry',
-    'Programming',
-    'Database',
-    'Networking',
-  ];
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -208,12 +215,18 @@ const UserDialog = ({ open, onClose, user, onSave }) => {
         // Add console logging for debugging student creation
         console.log('Creating student with data:', JSON.stringify(cleanedData, null, 2));
         console.log('Student info fields:', Object.keys(cleanedData.studentInfo));
+        console.log('Student class value:', cleanedData.studentInfo.class);
       } else if (formData.role === 'faculty') {
         cleanedData.facultyInfo = Object.fromEntries(
           Object.entries(formData.facultyInfo).filter(([_, v]) => v !== '' && v !== undefined)
         );
         delete cleanedData.studentInfo;
         delete cleanedData.parentInfo;
+        
+        // Add console logging for debugging faculty creation
+        console.log('Creating faculty with data:', JSON.stringify(cleanedData, null, 2));
+        console.log('Faculty info fields:', Object.keys(cleanedData.facultyInfo));
+        console.log('Faculty assigned classes:', cleanedData.facultyInfo.assignedClasses);
       } else if (formData.role === 'parent') {
         cleanedData.parentInfo = Object.fromEntries(
           Object.entries(formData.parentInfo).filter(([_, v]) => v !== '' && v !== undefined)
@@ -399,18 +412,11 @@ const UserDialog = ({ open, onClose, user, onSave }) => {
             onChange={handleChange}
             label="Class"
           >
-            {formData.studentInfo.department && 
-              classes.map((cls) => (
-                <MenuItem key={cls} value={`${formData.studentInfo.department.substring(0, 3)}-${cls}`}>
-                  {formData.studentInfo.department.substring(0, 3)}-{cls}
-                </MenuItem>
-              ))
-            }
-            {!formData.studentInfo.department && 
-              <MenuItem disabled value="">
-                Select department first
+            {CLASS_OPTIONS.map((cls) => (
+              <MenuItem key={cls} value={cls}>
+                {cls}
               </MenuItem>
-            }
+            ))}
           </Select>
         </FormControl>
       </Grid>
@@ -524,7 +530,7 @@ const UserDialog = ({ open, onClose, user, onSave }) => {
             onChange={handleChange}
             label="Subjects"
           >
-            {subjects.map((subject) => (
+            {SUBJECT_OPTIONS.map((subject) => (
               <MenuItem key={subject} value={subject}>
                 {subject}
               </MenuItem>
@@ -542,9 +548,9 @@ const UserDialog = ({ open, onClose, user, onSave }) => {
             onChange={handleChange}
             label="Assigned Classes"
           >
-            {classes.map((cls) => (
+            {CLASS_OPTIONS.map((cls) => (
               <MenuItem key={cls} value={cls}>
-                Class {cls}
+                {cls}
               </MenuItem>
             ))}
           </Select>

@@ -21,7 +21,10 @@ async function testEmail() {
       user: EMAIL_USER,
       pass: EMAIL_PASSWORD
     },
-    debug: true // Enable debug logs
+    debug: true, // Enable debug logs
+    tls: {
+      rejectUnauthorized: false // Allow self-signed certificates
+    }
   });
   
   console.log('Transporter created');

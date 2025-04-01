@@ -183,12 +183,6 @@ const FacultyDashboard = () => {
       color: theme.palette.success.main
     },
     { 
-      title: 'View Timetable',
-      icon: <ScheduleIcon />,
-      path: '/faculty/timetable',
-      color: theme.palette.primary.main
-    },
-    { 
       title: 'Check Messages',
       icon: <MessageIcon />,
       path: '/faculty/messages',

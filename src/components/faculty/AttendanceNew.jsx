@@ -159,6 +159,10 @@ const AttendanceNew = () => {
     
     try {
       setLoading(true);
+      console.log('==================================================');
+      console.log('🔄 FETCHING SAVED ATTENDANCE:');
+      console.log(`Class: ${selectedClass}, Subject: ${selectedSubject}, Date: ${new Date(selectedDate).toLocaleDateString()}`);
+      
       // Fetch saved attendance data from server using the correct endpoint
       const response = await api.get('/attendance/class', {
         params: { 
@@ -180,11 +184,40 @@ const AttendanceNew = () => {
           };
         });
         setSavedAttendance(savedData);
+        
+        // Log summary of saved attendance
+        const attendanceCount = {
+          present: 0,
+          absent: 0,
+          late: 0,
+          total: response.data.data.length
+        };
+        
+        response.data.data.forEach(record => {
+          if (record.status in attendanceCount) {
+            attendanceCount[record.status]++;
+          }
+        });
+        
+        console.log('📊 SAVED ATTENDANCE SUMMARY:');
+        console.log(`Total records: ${attendanceCount.total}`);
+        console.log(`Present: ${attendanceCount.present}`);
+        console.log(`Absent: ${attendanceCount.absent}`);
+        console.log(`Late: ${attendanceCount.late}`);
+        console.log('==================================================');
       } else {
+        console.log('ℹ️ No saved attendance data found');
+        console.log('==================================================');
         setSavedAttendance(null);
       }
     } catch (error) {
       console.error('Error fetching saved attendance:', error);
+      console.log('==================================================');
+      console.log('❌ ERROR FETCHING SAVED ATTENDANCE:');
+      console.log(`Class: ${selectedClass}, Subject: ${selectedSubject}, Date: ${new Date(selectedDate).toLocaleDateString()}`);
+      console.log(`Error message: ${error.message}`);
+      console.log('==================================================');
+      
       if (error.response?.status === 403) {
         toast.error('You do not have permission to view attendance for this class/subject');
       } else if (error.response?.status === 401) {
@@ -334,6 +367,34 @@ const AttendanceNew = () => {
       });
       
       if (response.data.success) {
+        // Browser console logging for email notifications
+        console.log('==================================================');
+        console.log('📧 ATTENDANCE SUBMISSION RESULT:');
+        console.log(`Class: ${selectedClass}, Subject: ${selectedSubject}, Date: ${new Date(selectedDate).toLocaleDateString()}`);
+        
+        if (response.data.emailNotifications) {
+          console.log('📨 EMAIL NOTIFICATION DETAILS:');
+          console.log(`✓ Total records processed: ${attendanceRecords.length}`);
+          console.log(`✓ Absent/Late students: ${absentAndLateCount}`);
+          console.log(`✅ Successful notifications: ${response.data.emailNotifications.sent || 0}`);
+          console.log(`❌ Failed notifications: ${response.data.emailNotifications.failed || 0}`);
+          
+          if (response.data.emailNotifications.parentDetails) {
+            console.log('📧 PARENT NOTIFICATIONS:');
+            console.log(`  - Successful: ${response.data.emailNotifications.parentDetails.success || 0}`);
+            console.log(`  - Failed: ${response.data.emailNotifications.parentDetails.failed || 0}`);
+          }
+          
+          if (response.data.emailNotifications.studentDetails) {
+            console.log('📧 STUDENT NOTIFICATIONS:');
+            console.log(`  - Successful: ${response.data.emailNotifications.studentDetails.success || 0}`);
+            console.log(`  - Failed: ${response.data.emailNotifications.studentDetails.failed || 0}`);
+          }
+        } else {
+          console.log('⚠️ No email notification data returned from server');
+        }
+        console.log('==================================================');
+        
         // Toast notification with info about emails sent
         if (response.data.emailNotifications && response.data.emailNotifications.sent > 0) {
           toast.success(response.data.message, { duration: 5000 });
@@ -358,21 +419,40 @@ const AttendanceNew = () => {
         // Refresh attendance data to ensure we have the latest
         fetchSavedAttendance();
       } else {
+        console.error('❌ Attendance submission failed:', response.data.message || 'Unknown error');
         toast.error(response.data.message || 'Failed to submit attendance');
       }
     } catch (error) {
       console.error('Error submitting attendance:', error);
       
+      // Detailed error logging for browser console
+      console.log('==================================================');
+      console.log('❌ ATTENDANCE SUBMISSION ERROR:');
+      console.log(`Class: ${selectedClass}, Subject: ${selectedSubject}, Date: ${new Date(selectedDate).toLocaleDateString()}`);
+      console.log('Error details:');
+      console.log(`- Message: ${error.message}`);
+      
       if (error.response) {
+        console.log(`- Status: ${error.response.status}`);
+        console.log(`- Response data: ${JSON.stringify(error.response.data || {})}`);
+        
+        if (error.response.data?.emailErrors) {
+          console.log('📧 EMAIL ERROR DETAILS:');
+          console.log(`- ${error.response.data.emailErrors}`);
+        }
+        
         const status = error.response.status;
         const errorMessage = error.response.data?.message || 'An error occurred';
         
         if (status === 403) {
+          console.log('❌ PERMISSION ERROR: User does not have permission to mark attendance');
           toast.error('You do not have permission to mark attendance for this class/subject');
         } else if (status === 401) {
+          console.log('❌ AUTHENTICATION ERROR: User session expired or invalid');
           toast.error('Session expired. Please login again.');
           // Redirect to login or handle session expiry
         } else if (status === 409) {
+          console.log('⚠️ CONFLICT: Attendance records already exist for this date/class/subject');
           // Handle duplicate records
           toast.warning(errorMessage);
           
@@ -393,6 +473,34 @@ const AttendanceNew = () => {
               });
               
               if (updateResponse.data.success) {
+                // Browser console logging for email notifications in update
+                console.log('==================================================');
+                console.log('📧 ATTENDANCE UPDATE RESULT:');
+                console.log(`Class: ${selectedClass}, Subject: ${selectedSubject}, Date: ${new Date(selectedDate).toLocaleDateString()}`);
+                
+                if (updateResponse.data.emailNotifications) {
+                  console.log('📨 EMAIL NOTIFICATION DETAILS:');
+                  console.log(`✓ Total records updated: ${attendanceRecords.length}`);
+                  console.log(`✓ Absent/Late students: ${absentAndLateCount}`);
+                  console.log(`✅ Successful notifications: ${updateResponse.data.emailNotifications.sent || 0}`);
+                  console.log(`❌ Failed notifications: ${updateResponse.data.emailNotifications.failed || 0}`);
+                  
+                  if (updateResponse.data.emailNotifications.parentDetails) {
+                    console.log('📧 PARENT NOTIFICATIONS:');
+                    console.log(`  - Successful: ${updateResponse.data.emailNotifications.parentDetails.success || 0}`);
+                    console.log(`  - Failed: ${updateResponse.data.emailNotifications.parentDetails.failed || 0}`);
+                  }
+                  
+                  if (updateResponse.data.emailNotifications.studentDetails) {
+                    console.log('📧 STUDENT NOTIFICATIONS:');
+                    console.log(`  - Successful: ${updateResponse.data.emailNotifications.studentDetails.success || 0}`);
+                    console.log(`  - Failed: ${updateResponse.data.emailNotifications.studentDetails.failed || 0}`);
+                  }
+                } else {
+                  console.log('⚠️ No email notification data returned from server');
+                }
+                console.log('==================================================');
+                
                 // Toast notification with info about emails sent
                 if (updateResponse.data.emailNotifications && updateResponse.data.emailNotifications.sent > 0) {
                   toast.success(updateResponse.data.message, { duration: 5000 });
@@ -417,19 +525,42 @@ const AttendanceNew = () => {
                 // Refresh attendance data to ensure we have the latest
                 fetchSavedAttendance();
               } else {
+                console.error('❌ Attendance update failed:', updateResponse.data.message || 'Unknown error');
                 toast.error(updateResponse.data.message || 'Failed to update attendance');
               }
             } catch (updateError) {
               console.error('Error updating attendance:', updateError);
+              
+              // Detailed error logging for update attempt
+              console.log('==================================================');
+              console.log('❌ ATTENDANCE UPDATE ERROR:');
+              console.log(`Class: ${selectedClass}, Subject: ${selectedSubject}, Date: ${new Date(selectedDate).toLocaleDateString()}`);
+              console.log('Error details:');
+              console.log(`- Message: ${updateError.message}`);
+              
+              if (updateError.response) {
+                console.log(`- Status: ${updateError.response.status}`);
+                console.log(`- Response data: ${JSON.stringify(updateError.response.data || {})}`);
+                
+                if (updateError.response.data?.emailErrors) {
+                  console.log('📧 EMAIL ERROR DETAILS:');
+                  console.log(`- ${updateError.response.data.emailErrors}`);
+                }
+              }
+              console.log('==================================================');
+              
               toast.error('Failed to update attendance records');
             }
           }
         } else {
+          console.log(`❌ SERVER ERROR: ${errorMessage}`);
           toast.error(errorMessage);
         }
       } else {
+        console.log('❌ NETWORK ERROR: Unable to connect to server');
         toast.error('Failed to submit attendance - connection error');
       }
+      console.log('==================================================');
     } finally {
       setLoading(false);
     }

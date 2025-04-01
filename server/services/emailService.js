@@ -19,16 +19,33 @@ try {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASSWORD
     },
-    debug: true // Enable debug logs for development
+    debug: true, // Enable debug logs for development
+    tls: {
+      rejectUnauthorized: false // Allow self-signed certificates
+    }
+  });
+
+  // Verify transporter connection on initialization
+  transporter.verify((error, success) => {
+    if (error) {
+      console.error('Email service verification failed:', error);
+    } else {
+      console.log('Email service is ready to send messages');
+    }
   });
 } catch (error) {
   console.error('Failed to initialize email transporter:', error);
 }
 
 const sendLeaveApplication = async (leaveData) => {
+  console.log('==================================================');
+  console.log('📧 LEAVE APPLICATION EMAIL PROCESS STARTED');
+  console.log('==================================================');
+  
   try {
     if (!transporter) {
-      console.error('Email transporter not initialized');
+      console.error('❌ ERROR: Email transporter not initialized');
+      console.error('❌ Cannot send leave application email - email service not configured');
       return { sent: false, error: 'Email service not configured properly' };
     }
     
@@ -54,7 +71,8 @@ const sendLeaveApplication = async (leaveData) => {
 
     // Validate required fields
     if (!toEmail) {
-      console.error('Missing required email recipient');
+      console.error('❌ ERROR: Missing required email recipient');
+      console.error('❌ Cannot send leave application email without recipient address');
       return { sent: false, error: 'Email recipient is required' };
     }
 
@@ -285,26 +303,46 @@ const sendLeaveApplication = async (leaveData) => {
     };
 
     // Log email attempt
-    console.log('Sending email to:', toEmail);
+    console.log('📤 Sending leave application email to:', toEmail);
+    console.log(`   Student: ${studentName} (${studentId})`);
+    console.log(`   Leave period: ${formattedFromDate} to ${formattedToDate} (${durationDays} days)`);
+    console.log(`   Leave type: ${leaveType}`);
+    console.log(`   Attachments: ${(attachments && attachments.length) ? attachments.length : 'None'}`);
     
     // Verify transporter is working
     try {
+      console.log('✓ Verifying SMTP connection before sending email...');
       await transporter.verify();
-      console.log('SMTP connection verified successfully');
+      console.log('✓ SMTP connection verified successfully');
     } catch (verifyError) {
-      console.error('SMTP verification failed:', verifyError);
+      console.error('❌ SMTP verification failed:', verifyError);
+      console.error('❌ Cannot send leave application email due to SMTP connection failure');
       return { sent: false, error: 'Failed to connect to email server: ' + verifyError.message };
     }
 
     // Send email
     const info = await transporter.sendMail(mailOptions);
-    console.log('Email sent successfully:', info.messageId);
+    console.log('✅ SUCCESS: Leave application email sent successfully');
+    console.log(`   Message ID: ${info.messageId}`);
+    console.log(`   Recipient: ${toEmail}`);
+    
+    console.log('==================================================');
+    console.log('📧 LEAVE APPLICATION EMAIL SUMMARY:');
+    console.log(`Student: ${studentName} (${studentId})`);
+    console.log(`Leave: ${leaveType} from ${formattedFromDate} to ${formattedToDate}`);
+    console.log('✅ OVERALL STATUS: Email sent successfully');
+    console.log('==================================================');
+    
     return { sent: true, messageId: info.messageId };
   } catch (error) {
-    console.error('Error sending leave application email:');
-    console.error('- Error code:', error.code);
-    console.error('- Error message:', error.message);
-    console.error('- Error info:', error.response || 'No response data');
+    console.error('==================================================');
+    console.error('❌ ERROR sending leave application email:');
+    console.error(`Error code: ${error.code || 'N/A'}`);
+    console.error(`Error message: ${error.message}`);
+    console.error(`Error response: ${error.response || 'No response data'}`);
+    console.error(`Stack trace: ${error.stack}`);
+    console.error('==================================================');
+    
     return { sent: false, error: 'Failed to send leave application email: ' + error.message };
   }
 };
@@ -315,6 +353,10 @@ const sendLeaveApplication = async (leaveData) => {
  * @returns {Object} Success status and message IDs for parent and student emails
  */
 const sendAttendanceNotification = async (attendanceData) => {
+  console.log('==================================================');
+  console.log('📧 ATTENDANCE EMAIL NOTIFICATION PROCESS STARTED');
+  console.log('==================================================');
+  
   try {
     const {
       studentName,
@@ -329,9 +371,14 @@ const sendAttendanceNotification = async (attendanceData) => {
       remarks
     } = attendanceData;
 
+    console.log(`Processing attendance notification for student: ${studentName} (${studentId})`);
+    console.log(`Attendance status: ${attendanceStatus}, Class: ${className}, Subject: ${subject}`);
+    console.log(`Parent email: ${parentEmail || 'Not provided'}, Student email: ${studentEmail || 'Not provided'}`);
+
     // Check for required data
     if (!parentEmail && !studentEmail) {
-      console.error('No recipient email provided for attendance notification');
+      console.error('❌ ERROR: No recipient email provided for attendance notification');
+      console.error('❌ Cannot proceed with email notification without at least one recipient');
       return { success: false, error: 'No recipient email provided' };
     }
 
@@ -473,9 +520,25 @@ const sendAttendanceNotification = async (attendanceData) => {
       </html>
     `;
 
+    // Verify SMTP connection before sending emails
+    try {
+      console.log('✓ Verifying SMTP connection before sending emails...');
+      await transporter.verify();
+      console.log('✓ SMTP connection verified successfully');
+    } catch (verifyError) {
+      console.error('❌ SMTP connection verification failed:', verifyError.message);
+      console.error('❌ Cannot send emails due to SMTP connection failure');
+      return { 
+        success: false, 
+        error: 'Failed to connect to email server: ' + verifyError.message 
+      };
+    }
+
     // Send email to parent if email is provided
     if (parentEmail) {
       try {
+        console.log(`📤 Attempting to send notification email to parent (${parentEmail})`);
+        
         const parentMailOptions = {
           from: process.env.EMAIL_USER,
           to: parentEmail,
@@ -485,18 +548,27 @@ const sendAttendanceNotification = async (attendanceData) => {
 
         // Send parent email
         const parentInfo = await transporter.sendMail(parentMailOptions);
-        console.log(`Attendance notification email sent to parent (${parentEmail}):`, parentInfo.messageId);
+        console.log(`✅ SUCCESS: Notification email sent to parent (${parentEmail})`);
+        console.log(`   Message ID: ${parentInfo.messageId}`);
         result.parent = { sent: true, messageId: parentInfo.messageId };
       } catch (parentError) {
-        console.error(`Error sending parent notification for ${studentName}:`, parentError);
+        console.error(`❌ ERROR: Failed to send email to parent (${parentEmail})`);
+        console.error(`   Error code: ${parentError.code || 'N/A'}`);
+        console.error(`   Error message: ${parentError.message}`);
+        if (parentError.response) console.error(`   Server response: ${parentError.response}`);
+        
         result.parent = { sent: false, error: parentError.message };
         result.success = false;
       }
+    } else {
+      console.log('ℹ️ No parent email provided, skipping parent notification');
     }
 
     // Send email to student if email is provided
     if (studentEmail) {
       try {
+        console.log(`📤 Attempting to send notification email to student (${studentEmail})`);
+        
         const studentMailOptions = {
           from: process.env.EMAIL_USER,
           to: studentEmail,
@@ -506,18 +578,47 @@ const sendAttendanceNotification = async (attendanceData) => {
 
         // Send student email
         const studentInfo = await transporter.sendMail(studentMailOptions);
-        console.log(`Attendance notification email sent to student (${studentEmail}):`, studentInfo.messageId);
+        console.log(`✅ SUCCESS: Notification email sent to student (${studentEmail})`);
+        console.log(`   Message ID: ${studentInfo.messageId}`);
         result.student = { sent: true, messageId: studentInfo.messageId };
       } catch (studentError) {
-        console.error(`Error sending student notification to ${studentName}:`, studentError);
+        console.error(`❌ ERROR: Failed to send email to student (${studentEmail})`);
+        console.error(`   Error code: ${studentError.code || 'N/A'}`);
+        console.error(`   Error message: ${studentError.message}`);
+        if (studentError.response) console.error(`   Server response: ${studentError.response}`);
+        
         result.student = { sent: false, error: studentError.message };
         result.success = result.parent.sent; // Overall success is true if at least one email was sent
       }
+    } else {
+      console.log('ℹ️ No student email provided, skipping student notification');
     }
+
+    // Summarize the results
+    console.log('==================================================');
+    console.log('📧 EMAIL NOTIFICATION SUMMARY:');
+    console.log(`Student: ${studentName} (${studentId})`);
+    console.log(`Attendance: ${statusText} in ${subject} on ${formattedDate}`);
+    
+    if (result.parent.sent || result.student.sent) {
+      console.log('✅ OVERALL STATUS: Some or all notifications sent successfully');
+    } else {
+      console.log('❌ OVERALL STATUS: All notification attempts failed');
+    }
+    
+    console.log(`Parent notification: ${result.parent.sent ? 'SUCCESS' : 'FAILED'}`);
+    console.log(`Student notification: ${result.student.sent ? 'SUCCESS' : 'FAILED'}`);
+    console.log('==================================================');
 
     return result;
   } catch (error) {
-    console.error('Error sending attendance notification emails:', error);
+    console.error('==================================================');
+    console.error('❌ CRITICAL ERROR in attendance notification process:');
+    console.error(`Error name: ${error.name}`);
+    console.error(`Error message: ${error.message}`);
+    console.error(`Stack trace: ${error.stack}`);
+    console.error('==================================================');
+    
     return { 
       success: false, 
       error: 'Failed to send attendance notification emails: ' + error.message 

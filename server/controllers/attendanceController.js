@@ -166,17 +166,15 @@ const markAttendance = async (req, res) => {
         message: responseMessage,
         count: updates.length,
         emailNotifications: {
-          parent: {
-            sent: emailResults.parent.success,
+          sent: totalSent,
+          failed: totalFailed,
+          parentDetails: {
+            success: emailResults.parent.success,
             failed: emailResults.parent.failed
           },
-          student: {
-            sent: emailResults.student.success,
+          studentDetails: {
+            success: emailResults.student.success,
             failed: emailResults.student.failed
-          },
-          total: {
-            sent: totalSent,
-            failed: totalFailed
           }
         }
       });
@@ -297,17 +295,15 @@ const markAttendance = async (req, res) => {
           message: responseMessage,
           count: attendanceRecords.length,
           emailNotifications: {
-            parent: {
-              sent: emailResults.parent.success,
+            sent: totalSent,
+            failed: totalFailed,
+            parentDetails: {
+              success: emailResults.parent.success,
               failed: emailResults.parent.failed
             },
-            student: {
-              sent: emailResults.student.success,
+            studentDetails: {
+              success: emailResults.student.success,
               failed: emailResults.student.failed
-            },
-            total: {
-              sent: totalSent,
-              failed: totalFailed
             }
           }
         });

@@ -129,7 +129,6 @@ const MainLayout = () => {
         { text: 'Messages', icon: <MessageIcon />, path: '/admin/messages' },
       ],
       faculty: [
-        { text: 'Timetable', icon: <EventIcon />, path: '/faculty/timetable' },
         { text: 'Reports', icon: <AssessmentIcon />, path: '/faculty/reports' },
         { text: 'Messages', icon: <MessageIcon />, path: '/faculty/messages' },
       ],

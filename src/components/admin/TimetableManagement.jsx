@@ -42,6 +42,26 @@ import { toast } from 'react-hot-toast';
 import { getTimetable, saveTimetable, deleteTimetable } from '../../services/timetableService';
 import { userService } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
+import axios from 'axios';
+
+// Use axios with correct endpoint
+const departmentService = {
+  getDepartments: async () => {
+    try {
+      // Use the backend API URL with the correct path
+      const response = await axios.get('http://localhost:5001/api/departments', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      return { success: true, data: response.data };
+    } catch (error) {
+      console.error('Error in department service:', error);
+      return { success: false, error: error.message };
+    }
+  }
+};
 
 // Mock data for departments and courses
 const departments = [
@@ -222,14 +242,37 @@ const TimetableDialog = ({ open, onClose, schedule, onSave, existingSchedule = {
   });
   const [facultyList, setFacultyList] = useState([]);
   const [loadingFaculty, setLoadingFaculty] = useState(false);
+  const [error, setError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+
+  // Helper function to check authentication before API calls
+  const ensureAuthenticated = () => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      console.error('No authentication token found');
+      setError(true);
+      setErrorMessage('Authentication required. Please login.');
+      setTimeout(() => {
+        window.location.href = '/login';
+      }, 2000);
+      return false;
+    }
+    return true;
+  };
 
   useEffect(() => {
     fetchFacultyList();
   }, []);
 
   const fetchFacultyList = async () => {
+    // Check authentication first
+    if (!ensureAuthenticated()) {
+      return false;
+    }
+    
     setLoadingFaculty(true);
     try {
+      // Call the API to get faculty users
       const response = await userService.getUsers('faculty');
       if (response.success) {
         // Strictly filter to only include users with role 'faculty'
@@ -241,17 +284,23 @@ const TimetableDialog = ({ open, onClose, schedule, onSave, existingSchedule = {
         setFacultyList(facultyMembers);
         
         if (facultyMembers.length === 0) {
-          toast.error('No faculty members found');
+          console.warn('No faculty members found');
         }
+        setLoadingFaculty(false);
+        return true; // Return success
       } else {
         console.error('Failed to fetch faculty list:', response.error);
-        toast.error('Failed to load faculty list');
+        setError(true);
+        setErrorMessage('Failed to fetch faculty list: ' + response.error);
+        setLoadingFaculty(false);
+        return false; // Return failure
       }
     } catch (error) {
       console.error('Error fetching faculty list:', error);
-      toast.error('Failed to load faculty list');
-    } finally {
+      setError(true);
+      setErrorMessage('Authentication or permission error. Please login with appropriate credentials.');
       setLoadingFaculty(false);
+      return false; // Return failure
     }
   };
 
@@ -351,6 +400,12 @@ const TimetableDialog = ({ open, onClose, schedule, onSave, existingSchedule = {
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle>{schedule ? 'Edit Schedule' : 'Add New Schedule'}</DialogTitle>
       <DialogContent>
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {errorMessage}
+          </Alert>
+        )}
+        
         <Grid container spacing={3} sx={{ mt: 1 }}>
           <Grid item xs={12} md={6}>
             <FormControl fullWidth>
@@ -386,7 +441,7 @@ const TimetableDialog = ({ open, onClose, schedule, onSave, existingSchedule = {
             </FormControl>
           </Grid>
           <Grid item xs={12} md={6}>
-            <FormControl fullWidth error={!formData.faculty && formData.department}>
+            <FormControl fullWidth error={!formData.faculty && formData.department ? true : false}>
               <InputLabel>Faculty</InputLabel>
               <Select
               name="faculty"
@@ -497,7 +552,8 @@ const TimetableDialog = ({ open, onClose, schedule, onSave, existingSchedule = {
 const TimetableManagement = () => {
   const { user, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const [timetable, setTimetable] = useState({});
   const [selectedClass, setSelectedClass] = useState('');
   const [selectedSemester, setSelectedSemester] = useState('');
@@ -505,6 +561,10 @@ const TimetableManagement = () => {
   const [openDialog, setOpenDialog] = useState(false);
   const [selectedSchedule, setSelectedSchedule] = useState(null);
   const [currentTab, setCurrentTab] = useState(0);
+  const [departmentList, setDepartmentList] = useState([]);
+  const [loadingDepartment, setLoadingDepartment] = useState(false);
+  const [facultyList, setFacultyList] = useState([]);
+  const [loadingFaculty, setLoadingFaculty] = useState(false);
 
   // Check user permissions
   const canModifyTimetable = user && (user.role === 'admin' || user.role === 'faculty');
@@ -519,35 +579,21 @@ const TimetableManagement = () => {
       }
       
       if (!canModifyTimetable) {
-        setError('You do not have permission to modify timetables. Please contact an administrator.');
+        setError(true);  // Set error to boolean true
+        setErrorMessage('You do not have permission to modify timetables. Please contact an administrator.');
         return;
       }
     }
   }, [user, authLoading, canModifyTimetable]);
 
   const fetchTimetable = async () => {
-    if (!selectedClass || !selectedSemester || !selectedCourse) return;
-
-    setLoading(true);
-    setError(null);
+    // Check authentication first
+    if (!ensureAuthenticated()) {
+      return false;
+    }
     
-    try {
-      // Get timetable based on department, semester, and course
-      const departmentTimetables = initialTimetables[selectedClass] || {};
-      const semesterTimetables = departmentTimetables[selectedSemester] || {};
-      const courseTimetable = semesterTimetables[selectedCourse] || {
-          monday: [],
-          tuesday: [],
-          wednesday: [],
-          thursday: [],
-          friday: []
-        };
-
-      setTimetable(courseTimetable);
-        setError(null);
-    } catch (error) {
-      console.error('Error in fetchTimetable:', error);
-      setError(error.message || 'Failed to fetch timetable');
+    if (!selectedClass || !selectedSemester || !selectedCourse) {
+      // Set empty timetable when no selection is made
       setTimetable({
         monday: [],
         tuesday: [],
@@ -555,13 +601,55 @@ const TimetableManagement = () => {
         thursday: [],
         friday: []
       });
-    } finally {
+      return false; // Return failure due to missing selections
+    }
+
+    setLoading(true);
+    setError(false);
+    setErrorMessage('');
+    
+    try {
+      // Call the API to get timetable
+      const response = await getTimetable(selectedClass, selectedSemester, selectedCourse);
+      if (response.success) {
+        setTimetable(response.data);
+        setLoading(false);
+        return true; // Return success
+      } else {
+        console.error('Failed to fetch timetable:', response.error);
+        setError(true);
+        setErrorMessage('Failed to fetch timetable: ' + response.error);
+        setTimetable({
+          monday: [],
+          tuesday: [],
+          wednesday: [],
+          thursday: [],
+          friday: []
+        });
+        setLoading(false);
+        return false; // Return failure
+      }
+    } catch (error) {
+      console.error('Error in fetchTimetable:', error);
+      setError(true);
+      setErrorMessage('Authentication or permission error. Please login with appropriate credentials.');
+      setTimetable({
+        monday: [],
+        tuesday: [],
+        wednesday: [],
+        thursday: [],
+        friday: []
+      });
       setLoading(false);
+      return false; // Return failure
     }
   };
 
   useEffect(() => {
-    fetchTimetable();
+    // Only fetch when selections are changed by user, not during initial mount
+    if (selectedClass && selectedSemester && selectedCourse) {
+      fetchTimetable();
+    }
   }, [selectedClass, selectedSemester, selectedCourse]);
 
   const handleEditSchedule = (schedule) => {
@@ -572,6 +660,11 @@ const TimetableManagement = () => {
   const handleSaveSchedule = async (formData) => {
     if (!canModifyTimetable) {
       toast.error('You do not have permission to modify timetables');
+      return;
+    }
+
+    // Check authentication first
+    if (!ensureAuthenticated()) {
       return;
     }
 
@@ -610,7 +703,7 @@ const TimetableManagement = () => {
         semester: selectedSemester,
         department: selectedClass,
         schedule: {
-          day: formData.day,
+          day: formData.day.toLowerCase(),
           subject: formData.course,
           faculty: formData.faculty,
           startTime: startTime.trim(),
@@ -619,20 +712,23 @@ const TimetableManagement = () => {
         }
       };
 
+      // Call the real API to save the schedule
       const response = await saveTimetable(scheduleData);
+
       if (!response.success) {
         throw new Error(response.error || 'Failed to save schedule');
       }
 
       toast.success('Schedule saved successfully', { id: toastId });
       setOpenDialog(false);
-      await fetchTimetable();
+      await fetchTimetable(); // Refresh the timetable data
     } catch (error) {
       console.error('Error saving schedule:', error);
       toast.error(error.message || 'Failed to save schedule', { id: toastId });
       
       if (error.message.includes('permission') || error.message.includes('Authentication')) {
-        setError('You do not have permission to modify timetables or your session has expired');
+        setError(true);
+        setErrorMessage('You do not have permission to modify timetables or your session has expired');
         if (error.message.includes('Authentication')) {
           setTimeout(() => {
             window.location.href = '/login';
@@ -663,11 +759,88 @@ const TimetableManagement = () => {
     return `hsl(${h}, 70%, 95%)`;
   };
 
+  const fetchDepartmentList = async () => {
+    // Check authentication first
+    if (!ensureAuthenticated()) {
+      return false;
+    }
+    
+    setLoadingDepartment(true);
+    try {
+      const response = await departmentService.getDepartments();
+      if (response.success) {
+        setDepartmentList(response.data);
+        setLoadingDepartment(false);
+        return true; // Return success
+      } else {
+        console.error('Failed to fetch department list:', response.error);
+        setError(true);
+        setErrorMessage('Failed to fetch department list: ' + response.error);
+        setLoadingDepartment(false);
+        return false; // Return failure
+      }
+    } catch (error) {
+      console.error('Error fetching department list:', error);
+      setError(true);
+      setErrorMessage('Error fetching department list: ' + error.message);
+      setLoadingDepartment(false);
+      return false; // Return failure
+    }
+  };
+
+  // Helper function to check authentication before API calls
+  const ensureAuthenticated = () => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      console.error('No authentication token found');
+      setError(true);
+      setErrorMessage('Authentication required. Please login.');
+      setTimeout(() => {
+        window.location.href = '/login';
+      }, 2000);
+      return false;
+    }
+    return true;
+  };
+
+  // Fetch data when component mounts
+  useEffect(() => {
+    const initializeComponent = async () => {
+      try {
+        // Check user authentication first
+        if (!user) {
+          setError(true);
+          setErrorMessage('Authentication required. Please login.');
+          return;
+        }
+        
+        // Fetch department data (using mock service)
+        const deptResult = await fetchDepartmentList();
+        
+        // Only continue with other fetches if department fetch succeeded
+        if (deptResult !== false) {
+          // These might fail with 403 errors, but we've handled that in the individual functions
+          await fetchFacultyList();
+          await fetchTimetable();
+        }
+      } catch (error) {
+        console.error('Error initializing component:', error);
+        setError(true);
+        setErrorMessage('Error initializing component: ' + error.message);
+      }
+    };
+    
+    // Only run initialization if auth loading is complete
+    if (!authLoading) {
+      initializeComponent();
+    }
+  }, [authLoading, user]);
+
   return (
-      <Box sx={{ p: 3 }}>
-        <Typography variant="h4" gutterBottom>
-          Timetable Management
-        </Typography>
+    <Box sx={{ p: 3 }}>
+      <Typography variant="h4" gutterBottom>
+        Timetable Management
+      </Typography>
 
       {!canModifyTimetable && (
         <Alert severity="info" sx={{ mb: 3 }}>
@@ -677,7 +850,7 @@ const TimetableManagement = () => {
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
+          {errorMessage}
         </Alert>
       )}
       

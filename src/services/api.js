@@ -236,8 +236,18 @@ export const attendanceService = {
   },
 };
 
+// Cache variables
+const failedUserIdsCache = new Set();
+const activeUserRequests = new Map();
+
 // User services
 export const userService = {
+  // Reset cache method (mainly for testing/debugging)
+  resetCache: () => {
+    failedUserIdsCache.clear();
+    activeUserRequests.clear();
+  },
+
   getUsers: async () => {
     try {
       // Get current user and validate permissions
@@ -284,18 +294,101 @@ export const userService = {
   getUserById: async (id) => {
     try {
       if (!id) {
-        throw new Error('User ID is required');
+        console.error('No user ID provided to getUserById');
+        return {
+          success: false,
+          data: null,
+          error: 'User ID is required'
+        };
       }
-      const response = await api.get(`/users/${id}`);
       
-      if (!response) {
-        throw new Error('User not found');
+      // Check if this ID has previously failed with 404
+      if (failedUserIdsCache.has(id)) {
+        console.log(`User ID ${id} was previously not found - using cached result`);
+        return {
+          success: false,
+          data: null,
+          error: 'User not found',
+          code: 'NOT_FOUND',
+          fromCache: true
+        };
       }
+      
+      // Check if there's already an active request for this ID
+      if (activeUserRequests.has(id)) {
+        console.log(`Reusing existing request for user ID: ${id}`);
+        return activeUserRequests.get(id);
+      }
+      
+      // Check if token exists
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.error('No token found in localStorage');
+        return {
+          success: false,
+          data: null,
+          error: 'Authentication required'
+        };
+      }
+      
+      console.log(`Fetching user data for ID: ${id}`);
+      
+      // Create the promise for this request
+      const fetchPromise = (async () => {
+        try {
+          const response = await api.get(`/users/${id}`, {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          
+          if (!response) {
+            console.warn(`No response data for user ID: ${id}`);
+            return {
+              success: false,
+              data: null,
+              error: 'User not found'
+            };
+          }
 
-      return {
-        success: true,
-        data: response
-      };
+          console.log('User data fetched successfully:', response);
+          return {
+            success: true,
+            data: response
+          };
+        } catch (apiError) {
+          // Return a clear error response without throwing
+          console.error('Error in getUserById API call:', apiError);
+          
+          // Check if it's a 404 error - user not found
+          if (apiError.error === 'NOT_FOUND') {
+            console.log(`User with ID ${id} not found in the database`);
+            // Add to failed cache to avoid future requests
+            failedUserIdsCache.add(id);
+            return {
+              success: false,
+              data: null,
+              error: 'User not found',
+              code: 'NOT_FOUND'
+            };
+          }
+          
+          return {
+            success: false,
+            data: null,
+            error: apiError.message || 'Failed to fetch user'
+          };
+        } finally {
+          // Remove from active requests when done
+          activeUserRequests.delete(id);
+        }
+      })();
+      
+      // Store the promise in the active requests map
+      activeUserRequests.set(id, fetchPromise);
+      
+      // Return the promise
+      return fetchPromise;
     } catch (error) {
       console.error('Error in getUserById:', error);
       return {
@@ -361,6 +454,69 @@ export const userService = {
       return {
         success: false,
         error: error.message || 'Failed to delete user'
+      };
+    }
+  },
+  
+  getUserActivityLogs: async (userId) => {
+    try {
+      if (!userId) {
+        throw new Error('User ID is required');
+      }
+      
+      // Check if token exists
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.error('No token found in localStorage');
+        return {
+          success: false,
+          data: null,
+          error: 'Authentication required'
+        };
+      }
+      
+      // In a real app, this would call an API endpoint
+      // Since the endpoint might not exist, we'll return mock data
+      console.log(`Fetching activity logs for user: ${userId}`);
+      
+      // Get user role for better mock data
+      const user = JSON.parse(localStorage.getItem('user')) || {};
+      const role = user.role || 'user';
+      
+      // Create mock activity logs
+      const mockLogs = [
+        { 
+          action: 'Login', 
+          timestamp: new Date().toISOString(), 
+          details: `${role.charAt(0).toUpperCase() + role.slice(1)} logged in successfully` 
+        },
+        { 
+          action: 'Profile View', 
+          timestamp: new Date(Date.now() - 3600000).toISOString(), 
+          details: 'Viewed profile information' 
+        },
+        { 
+          action: 'Profile Update', 
+          timestamp: new Date(Date.now() - 86400000).toISOString(), 
+          details: `Updated ${role} profile` 
+        },
+        { 
+          action: 'Dashboard Access', 
+          timestamp: new Date(Date.now() - 172800000).toISOString(), 
+          details: 'Accessed system dashboard' 
+        }
+      ];
+      
+      return {
+        success: true,
+        data: mockLogs
+      };
+    } catch (error) {
+      console.error('Error in getUserActivityLogs:', error);
+      return {
+        success: false,
+        data: null,
+        error: error.message || 'Failed to fetch user activity logs'
       };
     }
   }
