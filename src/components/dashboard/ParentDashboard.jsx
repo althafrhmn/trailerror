@@ -37,7 +37,7 @@ const ParentDashboard = () => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [events, setEvents] = useState([]);
-  
+
   // Add student dialog state
   const [openAddDialog, setOpenAddDialog] = useState(false);
   const [studentId, setStudentId] = useState('');
@@ -161,9 +161,9 @@ const ParentDashboard = () => {
   };
 
   // Function to fetch all dashboard data
-  const fetchData = async () => {
-    try {
-      const currentUser = authService.getCurrentUser();
+    const fetchData = async () => {
+      try {
+        const currentUser = authService.getCurrentUser();
       if (!currentUser) {
         console.error('No current user found');
         setLoading(false);
@@ -186,7 +186,7 @@ const ParentDashboard = () => {
         localStorage.setItem('user', JSON.stringify(currentUser));
       }
       
-      setUser(currentUser);
+        setUser(currentUser);
 
       // Create mock student data function
       const createMockStudentData = (id = null) => {
@@ -222,7 +222,7 @@ const ParentDashboard = () => {
         ];
       };
 
-      // Fetch events from the API
+        // Fetch events from the API
       try {
         const token = localStorage.getItem('token');
         const response = await fetch('http://localhost:5001/api/events', {
@@ -314,7 +314,7 @@ const ParentDashboard = () => {
         if (invalidIds.length > 0) {
           cleanupInvalidStudentIds(currentUser, invalidIds);
         }
-        
+
         setStats({
           children: createMockStudentData(),
           pendingLeaves: 2,
@@ -347,14 +347,14 @@ const ParentDashboard = () => {
         notifications: [
           { title: 'Attendance Alert', message: 'Your child was marked late today', date: '2024-03-10' },
           { title: 'Leave Approval', message: 'Leave request has been approved', date: '2024-03-09' },
-        ],
-      });
-      setLoading(false);
-    } catch (error) {
-      console.error('Error fetching data:', error);
-      setLoading(false);
-    }
-  };
+          ],
+        });
+        setLoading(false);
+      } catch (error) {
+        console.error('Error fetching data:', error);
+        setLoading(false);
+      }
+    };
 
   useEffect(() => {
     fetchData();
@@ -418,79 +418,79 @@ const ParentDashboard = () => {
 
   return (
     <>
-      <Box sx={{ p: 3 }}>
-        <div className="space-y-6 animate-fade-in">
-          <div className="flex justify-between items-center">
-            <Typography variant="h4" className="text-primary font-bold">
+    <Box sx={{ p: 3 }}>
+      <div className="space-y-6 animate-fade-in">
+        <div className="flex justify-between items-center">
+          <Typography variant="h4" className="text-primary font-bold">
               Welcome, {user?.name || 'Parent'}
-            </Typography>
-            <Button
-              variant="contained"
-              color="primary"
-              startIcon={<NotificationsIcon />}
-              className="hover:shadow-lg"
-            >
-              View All Notifications
-            </Button>
-          </div>
+          </Typography>
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<NotificationsIcon />}
+            className="hover:shadow-lg"
+          >
+            View All Notifications
+          </Button>
+        </div>
 
-          <Grid container spacing={3} className="animate-slide-up">
-            <Grid item xs={12} md={4}>
-              <StatCard
-                icon={PersonIcon}
-                title="Children"
-                value={stats.children.length}
-                color="blue"
-              />
-            </Grid>
-            <Grid item xs={12} md={4}>
-              <StatCard
-                icon={AssignmentIcon}
-                title="Pending Leaves"
-                value={stats.pendingLeaves}
-                color="orange"
-              />
-            </Grid>
-            <Grid item xs={12} md={4}>
-              <StatCard
-                icon={NotificationsIcon}
-                title="New Notifications"
-                value={stats.notifications.length}
-                color="purple"
-              />
-            </Grid>
+        <Grid container spacing={3} className="animate-slide-up">
+          <Grid item xs={12} md={4}>
+            <StatCard
+              icon={PersonIcon}
+              title="Children"
+              value={stats.children.length}
+              color="blue"
+            />
           </Grid>
+          <Grid item xs={12} md={4}>
+            <StatCard
+              icon={AssignmentIcon}
+              title="Pending Leaves"
+              value={stats.pendingLeaves}
+              color="orange"
+            />
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <StatCard
+              icon={NotificationsIcon}
+              title="New Notifications"
+              value={stats.notifications.length}
+              color="purple"
+            />
+          </Grid>
+        </Grid>
 
-          <Grid container spacing={3} className="animate-slide-up" style={{ animationDelay: '0.2s' }}>
-            <Grid item xs={12} md={6}>
-              <Card className="hover-card h-full">
-                <CardContent>
-                  <Typography variant="h6" className="font-semibold mb-4">
-                    Children's Overview
-                  </Typography>
-                  <List>
+        <Grid container spacing={3} className="animate-slide-up" style={{ animationDelay: '0.2s' }}>
+          <Grid item xs={12} md={6}>
+            <Card className="hover-card h-full">
+              <CardContent>
+                <Typography variant="h6" className="font-semibold mb-4">
+                  Children's Overview
+                </Typography>
+                <List>
                     {stats.children.length > 0 ? (
                       stats.children.map((child, index) => (
-                        <ListItem
-                          key={index}
-                          className="hover:bg-gray-50 rounded-lg transition-colors duration-200"
-                        >
-                          <Avatar className="mr-4 bg-primary">
+                    <ListItem
+                      key={index}
+                      className="hover:bg-gray-50 rounded-lg transition-colors duration-200"
+                    >
+                      <Avatar className="mr-4 bg-primary">
                             {child?.name ? child.name.charAt(0) : '?'}
-                          </Avatar>
-                          <ListItemText
+                      </Avatar>
+                      <ListItemText
                             primary={child?.name || 'Unknown Student'}
                             secondary={`Class: ${child?.studentInfo?.class || 'N/A'} | Roll No: ${child?.studentInfo?.rollNo || 'N/A'}`}
-                          />
-                          <Button
-                            variant="outlined"
-                            color="primary"
-                            size="small"
-                            className="ml-4"
-                          >
-                            View Details
-                          </Button>
-                        </ListItem>
+                      />
+                      <Button
+                        variant="outlined"
+                        color="primary"
+                        size="small"
+                        className="ml-4"
+                      >
+                        View Details
+                      </Button>
+                    </ListItem>
                       ))
                     ) : (
                       <Box sx={{ p: 3, textAlign: 'center' }}>
@@ -510,16 +510,16 @@ const ParentDashboard = () => {
                         </Button>
                       </Box>
                     )}
-                  </List>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Calendar events={events} />
-            </Grid>
+                </List>
+              </CardContent>
+            </Card>
           </Grid>
-        </div>
-      </Box>
+          <Grid item xs={12} md={6}>
+            <Calendar events={events} />
+          </Grid>
+        </Grid>
+      </div>
+    </Box>
 
       {/* Add student dialog */}
       <Dialog open={openAddDialog} onClose={handleCloseAddDialog} maxWidth="sm" fullWidth>

@@ -246,3 +246,41 @@ label {
 .MuiDrawer-paper {
   @apply bg-primary text-white;
 }
+
+.bg-gradient-animate {
+  background: linear-gradient(-45deg, #FF6B6B, #4ECDC4, #FF6B6B, #4ECDC4);
+  background-size: 300% 300%;
+  animation: gradient-flow 15s ease infinite;
+}
+
+@keyframes gradient-flow {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.6s ease-out forwards;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.group:focus-within {
+  transform: scale(1.01);
+  transition: transform 0.2s ease;
+}

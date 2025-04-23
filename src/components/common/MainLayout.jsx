@@ -35,7 +35,7 @@ import {
 } from '@mui/icons-material';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { authService } from '../../services/api';
-import logo from '../../assets/logoo.png';
+import logo from '/Main.png';
 import { ErrorBoundary } from 'react-error-boundary';
 
 const drawerWidth = 240;
@@ -482,4 +482,4 @@ const MainLayout = () => {
   );
 };
 
-export default MainLayout; 
+export default MainLayout;

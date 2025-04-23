@@ -6,7 +6,7 @@ import ParentDashboard from '../components/dashboard/ParentDashboard';
 import EventsManagement from '../components/admin/EventsManagement';
 import TimetableManagement from '../components/admin/TimetableManagement';
 import ReportsManagement from '../components/admin/ReportsManagement';
-import Login from '../components/auth/Login';
+import Login from '../components/auth/Login'; // Updated import path
 import { authService } from '../services/api';
 
 // Protected Route wrapper component
